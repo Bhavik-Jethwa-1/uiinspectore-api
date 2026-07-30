@@ -210,6 +210,8 @@ Route::post('/ai/stream',      [AIController::class, 'stream'])
     ->middleware('api.auth')->middleware('subscription:ai_chat');
 Route::post('/ai/analyze',     [AIController::class, 'analyze'])
     ->middleware('api.auth')->middleware('subscription:screenshot_analysis');
+Route::post('/ai/analyze-screenshot', [AIController::class, 'analyze'])
+    ->middleware('api.auth')->middleware('subscription:screenshot_analysis');
 Route::post('/ai/detect',      [AIController::class, 'detect'])
     ->middleware('api.auth')->middleware('subscription:ai_ui_review');
 Route::post('/ai/suggestions', [AIController::class, 'suggestions'])
