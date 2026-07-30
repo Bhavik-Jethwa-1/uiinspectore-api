@@ -176,7 +176,8 @@ class AIStudioController extends Controller
         }
 
         // Build messages array for AI
-        $history = $this->buildMessages($convo, $req->message, $req->attachments);
+        $userName = $req->get('db_user')->name ?? $req->get('auth_user')['name'] ?? null;
+        $history = $this->buildMessages($convo, $req->message, $req->attachments, $userName);
 
         // Call AI provider
         $startTime = microtime(true);
@@ -278,7 +279,8 @@ class AIStudioController extends Controller
             'created_at'     => now(),
         ]);
 
-        $history = $this->buildMessages($convo, $req->message, $req->attachments);
+        $userName = $req->get('db_user')->name ?? $req->get('auth_user')['name'] ?? null;
+        $history = $this->buildMessages($convo, $req->message, $req->attachments, $userName);
         $startTime = microtime(true);
         $fullReply = '';
 
@@ -508,9 +510,14 @@ class AIStudioController extends Controller
 
     // ─── Private Helpers ──────────────────────────────────────────────────────
 
-    private function buildMessages(AIConversation $convo, string $newUserMessage, ?array $attachments): array
+    private function buildMessages(AIConversation $convo, string $newUserMessage, ?array $attachments, ?string $userName = null): array
     {
         $messages = [];
+
+        // User identity — always injected so AI knows the user's name
+        if ($userName) {
+            $messages[] = ['role' => 'system', 'content' => "The user's name is {$userName}. Always address them personally in your greetings and responses."];
+        }
 
         // System prompt
         if (!empty($convo->system_prompt)) {
