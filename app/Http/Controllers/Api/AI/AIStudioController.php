@@ -122,6 +122,207 @@ class AIStudioController extends Controller
         return response()->json(['success' => true, 'is_pinned' => $convo->is_pinned]);
     }
 
+    // ─── Conversation Management (Enterprise) ────────────────────────────────
+
+    public function archiveConversation(Request $req, string $id): JsonResponse
+    {
+        $userId = $this->getUserId($req);
+        if (!$userId) return response()->json(['error' => 'Unauthorized'], 401);
+
+        $convo = AIConversation::where('id', $id)->where('user_id', $userId)->first();
+        if (!$convo) return response()->json(['error' => 'Not found'], 404);
+
+        $convo->is_archived = !$convo->is_archived;
+        $convo->save();
+
+        return response()->json([
+            'success'     => true,
+            'is_archived' => $convo->is_archived,
+        ]);
+    }
+
+    public function restoreConversation(Request $req, string $id): JsonResponse
+    {
+        $userId = $this->getUserId($req);
+        if (!$userId) return response()->json(['error' => 'Unauthorized'], 401);
+
+        $convo = AIConversation::withTrashed()
+            ->where('id', $id)
+            ->where('user_id', $userId)
+            ->first();
+        if (!$convo) return response()->json(['error' => 'Not found'], 404);
+
+        if ($convo->trashed()) {
+            $convo->restore();
+        } else {
+            // Soft-undelete if not trashed, or just return success
+            return response()->json(['success' => true, 'restored' => false]);
+        }
+
+        return response()->json(['success' => true, 'restored' => true]);
+    }
+
+    public function favoriteConversation(Request $req, string $id): JsonResponse
+    {
+        $userId = $this->getUserId($req);
+        if (!$userId) return response()->json(['error' => 'Unauthorized'], 401);
+
+        $convo = AIConversation::where('id', $id)->where('user_id', $userId)->first();
+        if (!$convo) return response()->json(['error' => 'Not found'], 404);
+
+        $convo->is_favorite = !$convo->is_favorite;
+        $convo->save();
+
+        return response()->json([
+            'success'     => true,
+            'is_favorite' => $convo->is_favorite,
+        ]);
+    }
+
+    public function duplicateConversation(Request $req, string $id): JsonResponse
+    {
+        $userId = $this->getUserId($req);
+        if (!$userId) return response()->json(['error' => 'Unauthorized'], 401);
+
+        $original = AIConversation::where('id', $id)->where('user_id', $userId)->first();
+        if (!$original) return response()->json(['error' => 'Not found'], 404);
+
+        DB::beginTransaction();
+        try {
+            // Replicate conversation (without the same id/timestamps)
+            $new = $original->replicate();
+            $new->title = $original->title . ' (Copy)';
+            // Reset status flags on copy
+            $new->is_pinned   = false;
+            $new->is_archived = false;
+            $new->is_favorite = false;
+            $new->save();
+
+            // Duplicate all messages
+            $messages = AIMessage::where('conversation_id', $original->id)
+                ->orderBy('created_at', 'asc')
+                ->get();
+            foreach ($messages as $msg) {
+                $newMsg = $msg->replicate();
+                $newMsg->conversation_id = $new->id;
+                $newMsg->save();
+            }
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('AIStudio: Duplicate conversation failed', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Failed to duplicate conversation'], 500);
+        }
+
+        return response()->json(['success' => true, 'data' => $new], 201);
+    }
+
+    public function exportConversation(Request $req, string $id): JsonResponse
+    {
+        $userId = $this->getUserId($req);
+        if (!$userId) return response()->json(['error' => 'Unauthorized'], 401);
+
+        $convo = AIConversation::where('id', $id)->where('user_id', $userId)->first();
+        if (!$convo) return response()->json(['error' => 'Not found'], 404);
+
+        // Support both ?format= and /export/{format} route patterns
+        $format = $req->input('format') ?? $req->route('format') ?? 'json';
+        $format = strtolower((string) $format);
+        if (!in_array($format, ['json', 'markdown', 'md', 'html'], true)) {
+            $format = 'json';
+        }
+        if ($format === 'md') $format = 'markdown';
+
+        $messages = AIMessage::where('conversation_id', $id)
+            ->orderBy('created_at', 'asc')
+            ->get(['id', 'role', 'content', 'created_at', 'metadata']);
+
+        if ($format === 'markdown') {
+            $md  = "# {$convo->title}\n\n";
+            $md .= "_Exported from UI Inspectore on " . now()->toDateTimeString() . "_\n\n";
+            $md .= "---\n\n";
+            foreach ($messages as $m) {
+                $role = $m->role === 'user' ? '**User**' : ($m->role === 'assistant' ? '**AI Assistant**' : '**System**');
+                $ts  = $m->created_at ? $m->created_at->format('Y-m-d H:i') : '';
+                $md .= "### {$role}" . ($ts ? " · _{$ts}_" : '') . "\n\n";
+                $md .= trim((string) $m->content) . "\n\n";
+            }
+            return response()->json([
+                'success' => true,
+                'format'  => 'markdown',
+                'title'   => $convo->title,
+                'content' => $md,
+            ]);
+        }
+
+        if ($format === 'html') {
+            $title = htmlspecialchars($convo->title, ENT_QUOTES);
+            $html  = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>{$title}</title>";
+            $html .= "<style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:780px;margin:40px auto;padding:0 20px;color:#222;line-height:1.6;background:#fff;}";
+            $html .= "h1{border-bottom:2px solid #7c5cff;padding-bottom:10px;}";
+            $html .= ".meta{color:#888;font-size:13px;margin-bottom:30px;}";
+            $html .= ".msg{margin:18px 0;padding:14px 18px;border-radius:10px;}";
+            $html .= ".user{background:#f0ebff;border-left:4px solid #7c5cff;}";
+            $html .= ".assistant{background:#f5f5f5;border-left:4px solid #10a37f;}";
+            $html .= ".role{font-weight:700;margin-bottom:6px;font-size:13px;}";
+            $html .= ".ts{color:#888;font-weight:400;font-size:11px;margin-left:8px;}";
+            $html .= "pre{background:#0d1117;color:#c9d1d9;padding:14px;border-radius:8px;overflow-x:auto;}";
+            $html .= "code{background:rgba(124,92,255,0.08);padding:2px 6px;border-radius:4px;}";
+            $html .= "</style></head><body>";
+            $html .= "<h1>{$title}</h1>";
+            $html .= "<p class=\"meta\">Exported from UI Inspectore · " . now()->toDateTimeString() . "</p>";
+            foreach ($messages as $m) {
+                $role = $m->role === 'user' ? 'User' : ($m->role === 'assistant' ? 'AI Assistant' : 'System');
+                $cls  = $m->role === 'user' ? 'user' : 'assistant';
+                $ts   = $m->created_at ? $m->created_at->format('Y-m-d H:i') : '';
+                $content = nl2br(htmlspecialchars((string) $m->content, ENT_QUOTES));
+                $html .= "<div class=\"msg {$cls}\"><div class=\"role\">{$role}<span class=\"ts\">" . ($ts ? "· {$ts}" : '') . "</span></div><div>{$content}</div></div>";
+            }
+            $html .= "</body></html>";
+            return response()->json([
+                'success' => true,
+                'format'  => 'html',
+                'title'   => $convo->title,
+                'content' => $html,
+            ]);
+        }
+
+        // json (default)
+        return response()->json([
+            'success'      => true,
+            'format'       => 'json',
+            'title'        => $convo->title,
+            'conversation' => $convo,
+            'messages'     => $messages,
+        ]);
+    }
+
+    public function clearHistory(Request $req): JsonResponse
+    {
+        $userId = $this->getUserId($req);
+        if (!$userId) return response()->json(['error' => 'Unauthorized'], 401);
+
+        // Pull IDs first so we can soft-delete + report count
+        $convoIds = AIConversation::where('user_id', $userId)->pluck('id');
+        $count    = $convoIds->count();
+
+        DB::beginTransaction();
+        try {
+            // Soft-delete conversations (cascades to messages via FK, but be explicit)
+            AIMessage::whereIn('conversation_id', $convoIds)->delete();
+            AIConversation::where('user_id', $userId)->delete();
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('AIStudio: Clear history failed', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Failed to clear history'], 500);
+        }
+
+        return response()->json(['success' => true, 'deleted' => $count]);
+    }
+
     // ─── Messages ────────────────────────────────────────────────────────────
 
     public function listMessages(Request $req, string $conversationId): JsonResponse
@@ -497,6 +698,13 @@ class AIStudioController extends Controller
     }
 
     // ─── Private Helpers ──────────────────────────────────────────────────────
+
+    private function getUserId(Request $req): ?int
+    {
+        return $req->get('db_user')->id
+            ?? $req->get('auth_user')['id']
+            ?? null;
+    }
 
     private function buildMessages(AIConversation $convo, string $newUserMessage, ?array $attachments): array
     {
