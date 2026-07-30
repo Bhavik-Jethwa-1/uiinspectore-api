@@ -321,6 +321,7 @@ Route::prefix('ai/studio')->middleware('api.auth')->group(function () {
     Route::get ('/conversations/{id}',   [\App\Http\Controllers\Api\AI\AIStudioController::class, 'getConversation']);
     Route::put ('/conversations/{id}',   [\App\Http\Controllers\Api\AI\AIStudioController::class, 'updateConversation']);
     Route::delete('/conversations/{id}', [\App\Http\Controllers\Api\AI\AIStudioController::class, 'deleteConversation']);
+    Route::post('/conversations/clear-history', [\App\Http\Controllers\Api\AI\AIStudioController::class, 'clearHistory']);
     Route::post('/conversations/{id}/pin', [\App\Http\Controllers\Api\AI\AIStudioController::class, 'pinConversation']);
 
     // Messages

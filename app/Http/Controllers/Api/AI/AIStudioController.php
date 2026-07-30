@@ -108,6 +108,16 @@ class AIStudioController extends Controller
         return response()->json(['success' => true]);
     }
 
+    public function clearHistory(Request $req): JsonResponse
+    {
+        $userId = $req->get('db_user')->id ?? $req->get('auth_user')['id'] ?? null;
+        if (!$userId) return response()->json(['error' => 'Unauthorized'], 401);
+
+        AIConversation::where('user_id', $userId)->delete();
+
+        return response()->json(['success' => true, 'deleted' => true]);
+    }
+
     public function pinConversation(Request $req, string $id): JsonResponse
     {
         $userId = $req->get('db_user')->id ?? $req->get('auth_user')['id'] ?? null;
