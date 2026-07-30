@@ -320,13 +320,6 @@ Route::prefix('ai/studio')->middleware('api.auth')->group(function () {
     Route::put ('/conversations/{id}',   [\App\Http\Controllers\Api\AI\AIStudioController::class, 'updateConversation']);
     Route::delete('/conversations/{id}', [\App\Http\Controllers\Api\AI\AIStudioController::class, 'deleteConversation']);
     Route::post('/conversations/{id}/pin', [\App\Http\Controllers\Api\AI\AIStudioController::class, 'pinConversation']);
-    Route::post('/conversations/{id}/archive',    [\App\Http\Controllers\Api\AI\AIStudioController::class, 'archiveConversation']);
-    Route::post('/conversations/{id}/restore',   [\App\Http\Controllers\Api\AI\AIStudioController::class, 'restoreConversation']);
-    Route::post('/conversations/{id}/favorite',  [\App\Http\Controllers\Api\AI\AIStudioController::class, 'favoriteConversation']);
-    Route::post('/conversations/{id}/duplicate',  [\App\Http\Controllers\Api\AI\AIStudioController::class, 'duplicateConversation']);
-    Route::post('/conversations/{id}/export',     [\App\Http\Controllers\Api\AI\AIStudioController::class, 'exportConversation']);
-    Route::get ('/conversations/{id}/export/{format}', [\App\Http\Controllers\Api\AI\AIStudioController::class, 'exportConversation']);
-    Route::delete('/history',                      [\App\Http\Controllers\Api\AI\AIStudioController::class, 'clearHistory']);
 
     // Messages
     Route::get ('/conversations/{conversationId}/messages', [\App\Http\Controllers\Api\AI\AIStudioController::class, 'listMessages']);

@@ -3,14 +3,11 @@
 namespace App\Models\AI;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AIConversation extends Model
 {
-    use SoftDeletes;
-
     protected $table = 'ai_conversations';
 
     protected $fillable = [
@@ -24,7 +21,6 @@ class AIConversation extends Model
         'folder',
         'is_pinned',
         'is_archived',
-        'is_favorite',
         'metadata',
     ];
 
@@ -33,11 +29,9 @@ class AIConversation extends Model
         'max_tokens'    => 'integer',
         'is_pinned'     => 'boolean',
         'is_archived'   => 'boolean',
-        'is_favorite'   => 'boolean',
         'metadata'      => 'array',
         'created_at'    => 'datetime',
         'updated_at'    => 'datetime',
-        'deleted_at'    => 'datetime',
     ];
 
     public function user(): BelongsTo
