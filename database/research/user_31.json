@@ -1,0 +1,230 @@
+{
+    "research": [
+        {
+            "id": "res_da60e1636d9a",
+            "user_id": 31,
+            "topic": "UI Best Practices",
+            "scope": "ui_best_practices",
+            "category": "UI",
+            "provider": "openclaw",
+            "source": "ai",
+            "result": {
+                "title": "UI Best Practices: UI Best Practices",
+                "summary": "",
+                "key_principles": [],
+                "do_list": [],
+                "dont_list": [],
+                "patterns": [],
+                "metrics": [],
+                "examples": [],
+                "references": [],
+                "action_items": [],
+                "scope": "ui_best_practices",
+                "category": "UI"
+            },
+            "created_at": "2026-07-22 09:27:43"
+        },
+        {
+            "id": "res_7dd2038cf87c",
+            "user_id": 31,
+            "topic": "UX Best Practices",
+            "scope": "ux_best_practices",
+            "category": "UX",
+            "provider": "openclaw",
+            "source": "ai",
+            "result": {
+                "title": "UX Best Practices for Digital Products",
+                "summary": "Modern UX practice centers on reducing cognitive load while accelerating task completion across digital products. Research-driven design decisions consistently outperform intuition-based ones on conversion, retention, and satisfaction metrics. Nielsen's heuristics, layered information architecture, and progressive disclosure remain the highest-leverage foundations for product teams shipping at speed.",
+                "key_principles": [
+                    "Match the user's mental model \u2014 design around expectations users already hold from prior experience",
+                    "Visibility of system status prevents anxiety and abandoned flows during every state transition",
+                    "Progressive disclosure keeps complexity manageable as task depth grows",
+                    "Fitts's Law governs target sizing \u2014 bigger and closer targets win on accuracy and speed",
+                    "Hick's Law bounds choice \u2014 fewer visible options accelerate decision time",
+                    "Errors are first-class design material \u2014 design recovery paths, not just prevention",
+                    "Consistency (internal and external) builds predictable trust and reduces learning cost"
+                ],
+                "do_list": [
+                    "Run 5\u20138 user interviews before sketching any screen to anchor the problem space",
+                    "Card-sort to validate taxonomy before committing to navigation or IA",
+                    "Prototype-test with at least 5 users per iteration (Nielsen's diminishing returns curve)",
+                    "Use empty states to teach the core action, not just apologize for missing data",
+                    "Provide undo or confirmation for any destructive or irreversible action",
+                    "Make the primary action visually dominant via size, color, contrast, and position",
+                    "Show progress in any flow exceeding two steps or five seconds",
+                    "Support full keyboard navigation and visible focus states for all interactive elements"
+                ],
+                "dont_list": [
+                    "Don't hide primary navigation behind hamburger menus on desktop viewports",
+                    "Don't rely on color alone to convey state, error, or selection \u2014 pair with icon or text",
+                    "Don't ship features without validating user demand through research or analytics",
+                    "Don't bury the primary call-to-action below the fold on landing pages",
+                    "Don't reset form state when validation errors occur \u2014 preserve user input",
+                    "Don't use placeholder text as a substitute for persistent labels",
+                    "Don't auto-play audio or video without an explicit user gesture",
+                    "Don't use modal dialogs for non-modal information \u2014 they interrupt flow and break back-button expectations"
+                ],
+                "patterns": [
+                    {
+                        "name": "Progressive Disclosure",
+                        "description": "Reveal advanced options only when context warrants it, keeping the default surface minimal.",
+                        "example": "Gmail's 'Advanced settings' hidden behind a single click in the standard view",
+                        "use_when": "Feature breadth risks overwhelming new or infrequent users"
+                    },
+                    {
+                        "name": "Breadcrumb Navigation",
+                        "description": "Show hierarchical location with clickable ancestors, enabling lateral escape from deep paths.",
+                        "example": "Amazon's product category path above the listing title",
+                        "use_when": "Content depth exceeds three levels or users frequently arrive mid-hierarchy"
+                    },
+                    {
+                        "name": "Sticky Primary Action",
+                        "description": "Pin the conversion or next-step button during scroll so it remains reachable on long pages.",
+                        "example": "Stripe Checkout's persistent 'Pay' button on the right rail",
+                        "use_when": "Page length risks the CTA scrolling out of view before completion"
+                    },
+                    {
+                        "name": "Modal vs Inline Editing",
+                        "description": "Choose modal for focused multi-field tasks; inline for single-field, low-risk corrections.",
+                        "example": "Notion's inline text editing versus Google Docs' comment thread modal",
+                        "use_when": "Edit complexity ranges from a single word to many dependent fields"
+                    },
+                    {
+                        "name": "Empty State as Onboarding",
+                        "description": "Use first-visit empty screens to teach the core action with templates or sample data.",
+                        "example": "Notion's template gallery shown when a workspace has zero pages",
+                        "use_when": "The primary value requires user-generated content that is hard to imagine cold"
+                    },
+                    {
+                        "name": "Skeleton Screens",
+                        "description": "Render structural placeholders during data fetch to reduce perceived latency.",
+                        "example": "LinkedIn feed shimmer while posts load",
+                        "use_when": "Data fetches regularly exceed 200ms and content shape is predictable"
+                    },
+                    {
+                        "name": "Command Palette Navigation",
+                        "description": "Replace deep menu hierarchies with a searchable keyboard-driven launcher.",
+                        "example": "Linear's Cmd+K palette for jumping to any project, issue, or setting",
+                        "use_when": "Power users form a meaningful share of traffic and the action space is large"
+                    }
+                ],
+                "metrics": [
+                    {
+                        "name": "Task Success Rate",
+                        "target": "\u2265 90% for primary user tasks",
+                        "why": "Direct measure of whether users can complete core flows without assistance"
+                    },
+                    {
+                        "name": "Time on Task",
+                        "target": "Minimize without reducing success rate",
+                        "why": "Efficiency indicator; useful only when paired with success to avoid gaming"
+                    },
+                    {
+                        "name": "System Usability Scale (SUS)",
+                        "target": "\u2265 80 (above industry average of 68)",
+                        "why": "Standardized benchmark enabling comparison across products and releases"
+                    },
+                    {
+                        "name": "Error Rate per Task",
+                        "target": "< 5%",
+                        "why": "Signals friction, unclear affordances, or learnability issues"
+                    },
+                    {
+                        "name": "Net Promoter Score (NPS)",
+                        "target": "\u2265 40",
+                        "why": "Loyalty and satisfaction proxy that correlates with retention"
+                    },
+                    {
+                        "name": "First-Time Task Completion",
+                        "target": "\u2265 70% for new users",
+                        "why": "Onboarding effectiveness and immediate product clarity"
+                    },
+                    {
+                        "name": "HEART Framework Signals",
+                        "target": "Happiness, Engagement, Adoption, Retention, Task success \u2014 defined per feature",
+                        "why": "Google's framework for tying UX metrics to business outcomes without single-number fallacy"
+                    }
+                ],
+                "examples": [
+                    {
+                        "product": "Stripe",
+                        "feature": "Developer-first onboarding with inline interactive code samples",
+                        "takeaway": "Progressive disclosure scales complexity with user readiness instead of front-loading jargon"
+                    },
+                    {
+                        "product": "Linear",
+                        "feature": "Cmd+K command palette as primary navigation layer",
+                        "takeaway": "Search-driven navigation replaces deep menus and dramatically shortens task time for power users"
+                    },
+                    {
+                        "product": "Notion",
+                        "feature": "Block-based empty states with curated templates",
+                        "takeaway": "Empty states double as onboarding, inspiration, and time-to-value accelerator"
+                    },
+                    {
+                        "product": "Duolingo",
+                        "feature": "Streak counter, hearts, and micro-rewards",
+                        "takeaway": "Immediate feedback loops and visible progress teach through behavior, not instruction"
+                    },
+                    {
+                        "product": "Airbnb",
+                        "feature": "Sticky search and filter bar on long listing pages",
+                        "takeaway": "Persistent controls on long-scroll pages keep conversion reachable and reduce drop-off"
+                    },
+                    {
+                        "product": "GitHub",
+                        "feature": "Pull request review with inline comments and suggested changes",
+                        "takeaway": "Inline feedback reduces context switching and keeps review and revision tightly coupled"
+                    }
+                ],
+                "references": [
+                    {
+                        "title": "10 Usability Heuristics for User Interface Design",
+                        "source": "Nielsen Norman Group (nngroup.com)"
+                    },
+                    {
+                        "title": "Don't Make Me Think",
+                        "source": "Steve Krug"
+                    },
+                    {
+                        "title": "The Design of Everyday Things",
+                        "source": "Don Norman"
+                    },
+                    {
+                        "title": "Information Architecture for the World Wide Web",
+                        "source": "Rosenfeld & Morville"
+                    },
+                    {
+                        "title": "Laws of UX",
+                        "source": "Jon Yablonski"
+                    },
+                    {
+                        "title": "Atomic Design",
+                        "source": "Brad Frost"
+                    },
+                    {
+                        "title": "HEART: A Framework for Measuring UX",
+                        "source": "Google Research"
+                    },
+                    {
+                        "title": "Rocket Surgery Made Easy",
+                        "source": "Steve Krug"
+                    }
+                ],
+                "action_items": [
+                    "Audit your top three user flows against Nielsen's 10 heuristics within the next week",
+                    "Run a five-user usability test on the highest-traffic screen before the next release",
+                    "Card-sort your primary navigation with at least 15 participants to validate the taxonomy",
+                    "Define one core metric per feature that maps to a user outcome, not a vanity number",
+                    "Replace all placeholder-text-as-label patterns with persistent labels across every form",
+                    "Add undo or explicit confirmation to every destructive action currently in the product",
+                    "Instrument empty, loading, and error states for every primary flow and review them quarterly",
+                    "Establish a quarterly research cadence of five interviews per major persona segment"
+                ],
+                "scope": "ux_best_practices",
+                "category": "UX"
+            },
+            "created_at": "2026-07-22 09:59:17"
+        }
+    ]
+}

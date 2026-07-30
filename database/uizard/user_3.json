@@ -1,0 +1,59 @@
+{
+    "projects": [
+        {
+            "id": "proj_6a572f96e81a2",
+            "name": "SaaS Landing",
+            "description": "",
+            "industry": "general",
+            "product_type": "web",
+            "design_style": "modern",
+            "screens": [],
+            "created_at": "2026-07-15 06:58:30",
+            "updated_at": "2026-07-15 06:58:30"
+        },
+        {
+            "id": "proj_6a5732074e56d",
+            "name": "Test",
+            "description": "Make Server Dashbaord",
+            "industry": "general",
+            "product_type": "web",
+            "design_style": "modern",
+            "screens": [],
+            "created_at": "2026-07-15 07:08:55",
+            "updated_at": "2026-07-15 07:08:55"
+        },
+        {
+            "id": "proj_6a5737b36ae85",
+            "name": "SaaS Dashboard",
+            "description": "",
+            "industry": "general",
+            "product_type": "web",
+            "design_style": "modern",
+            "screens": [],
+            "created_at": "2026-07-15 07:33:07",
+            "updated_at": "2026-07-15 07:33:07"
+        },
+        {
+            "id": "proj_6a5737b773f09",
+            "name": "Mobile App",
+            "description": "",
+            "industry": "general",
+            "product_type": "web",
+            "design_style": "modern",
+            "screens": [],
+            "created_at": "2026-07-15 07:33:11",
+            "updated_at": "2026-07-15 07:33:11"
+        },
+        {
+            "id": "proj_6a5737bb9d686",
+            "name": "Blog \/ CMS",
+            "description": "",
+            "industry": "general",
+            "product_type": "web",
+            "design_style": "modern",
+            "screens": [],
+            "created_at": "2026-07-15 07:33:15",
+            "updated_at": "2026-07-15 07:33:15"
+        }
+    ]
+}

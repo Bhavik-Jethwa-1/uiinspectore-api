@@ -1,0 +1,128 @@
+{
+    "research": [
+        {
+            "id": "res_938fd8ad158b",
+            "user_id": 30,
+            "topic": "UX Best Practices",
+            "scope": "ux_best_practices",
+            "category": "UX",
+            "provider": "openclaw",
+            "source": "ai",
+            "result": {
+                "title": "UX Best Practices: A Research Brief",
+                "summary": "A grounded synthesis of UX practice across research, architecture, interaction, heuristics, flows, and navigation, drawn from Nielsen Norman Group, Don Norman, Material Design, and observed industry patterns. The brief favors evidence-based methods, established mental models, and measurable outcomes over novelty. Use it as a checklist when designing, reviewing, or auditing digital products.",
+                "key_principles": [
+                    "User-centered design: every decision is validated against real user behavior, goals, and contexts, not assumptions.",
+                    "Progressive disclosure: reveal complexity only as users need it, keeping primary paths fast and shallow.",
+                    "Consistency and standards: reuse established patterns, terminology, and locations so users transfer prior knowledge across the product."
+                ],
+                "do_list": [
+                    "Test with at least five real users per iteration and act on observed friction, not stated preferences.",
+                    "Map user flows end-to-end before designing screens; ensure each flow has a clear entry, success state, and recovery path.",
+                    "Establish an information hierarchy with one primary action per view and group secondary actions deliberately."
+                ],
+                "dont_list": [
+                    "Do not hide primary actions behind gestures (long-press, edge swipes) without an equivalent discoverable affordance.",
+                    "Do not introduce custom iconography that diverges from platform or web conventions without labels and onboarding.",
+                    "Do not redesign familiar patterns (back button, breadcrumbs, form fields) without a measurable benefit that justifies the relearning cost."
+                ],
+                "patterns": [
+                    {
+                        "name": "Progressive Disclosure",
+                        "description": "Show only the essential controls or information up front; surface advanced options on demand via expanders, modals, or secondary panels.",
+                        "example": "Gmail's 'Compose' reveals a minimal form first and adds Cc\/Bcc, formatting, and attachments only when requested.",
+                        "use_when": "A view serves both novice and expert users, or contains high-density controls that would overwhelm primary users."
+                    },
+                    {
+                        "name": "Card-Based Layouts",
+                        "description": "Group related content into discrete, scannable units with consistent structure, visual rhythm, and clear hierarchy.",
+                        "example": "Linear's inbox groups issues as cards with priority, status, and assignees, enabling rapid triage.",
+                        "use_when": "Users browse heterogeneous items where each item carries multiple attributes (title, meta, action)."
+                    },
+                    {
+                        "name": "Sticky Primary Navigation",
+                        "description": "Keep the main navigation or top action persistently visible while content scrolls.",
+                        "example": "Notion's left sidebar and editor top bar remain fixed so users never lose orientation in long documents.",
+                        "use_when": "Apps with deep hierarchies, frequent section switching, or long-form content where orientation loss is a risk."
+                    },
+                    {
+                        "name": "Inline Validation",
+                        "description": "Validate form fields as users complete them rather than only on submit, with specific, actionable error messages.",
+                        "example": "Stripe Checkout validates card numbers and expiry in place and shows the exact failing field on submit.",
+                        "use_when": "Forms with multiple fields, fast-fail inputs (credit cards, emails), or any flow where submit-time errors cause abandonment."
+                    }
+                ],
+                "metrics": [
+                    {
+                        "name": "Task Success Rate",
+                        "target": ">85% on core user flows",
+                        "why": "Direct measure of whether users can complete primary goals; the single most important UX outcome metric."
+                    },
+                    {
+                        "name": "Time on Task",
+                        "target": "Baseline + <20% after redesigns",
+                        "why": "Captures efficiency; large increases signal friction or confusion even when success rate is acceptable."
+                    },
+                    {
+                        "name": "System Usability Scale (SUS)",
+                        "target": ">80 (above average)",
+                        "why": "Validated, comparable cross-product score for perceived usability across sessions and cohorts."
+                    },
+                    {
+                        "name": "Error Rate",
+                        "target": "<5% on critical flows",
+                        "why": "Errors reveal points of misalignment between user mental model and system behavior."
+                    }
+                ],
+                "examples": [
+                    {
+                        "product": "Linear",
+                        "feature": "Keyboard-first navigation with command palette (Cmd+K)",
+                        "takeaway": "Power-user patterns adopted as the default; every action is reachable in 1\u20132 keystrokes without sacrificing discoverability."
+                    },
+                    {
+                        "product": "Stripe",
+                        "feature": "Progressive disclosure in API documentation with code examples first, explanations expandable",
+                        "takeaway": "Lead with the working example; defer theory until users have a working artifact, reducing time-to-first-success."
+                    },
+                    {
+                        "product": "Notion",
+                        "feature": "Slash command menu and block-based editing",
+                        "takeaway": "Contextual commands appear exactly where the user's cursor is, eliminating mode-switching and menus hunting."
+                    },
+                    {
+                        "product": "Apple Mail",
+                        "feature": "Pull-to-refresh and swipe gestures with visible labels",
+                        "takeaway": "Gestures are reinforced by visible affordances and labels during onboarding, avoiding the 'hidden interaction' trap."
+                    }
+                ],
+                "references": [
+                    {
+                        "title": "10 Usability Heuristics for User Interface Design",
+                        "source": "Nielsen Norman Group (nngroup.com)"
+                    },
+                    {
+                        "title": "The Design of Everyday Things",
+                        "source": "Don Norman, Basic Books"
+                    },
+                    {
+                        "title": "Material Design Guidelines",
+                        "source": "Google Material Design (m3.material.io)"
+                    },
+                    {
+                        "title": "Don't Make Me Think",
+                        "source": "Steve Krug, New Riders"
+                    }
+                ],
+                "action_items": [
+                    "Run a 5-user moderated usability test on the top three user flows within the next two weeks and prioritize fixes by severity of observed friction.",
+                    "Audit current navigation against platform conventions (iOS HIG, Material 3, Web Standards) and produce a one-page consistency report.",
+                    "Measure baseline SUS score for the product and re-measure after each major release to track perceived usability over time."
+                ],
+                "scope": "ux_best_practices",
+                "category": "UX"
+            },
+            "created_at": "2026-07-22 09:13:37"
+        }
+    ]
+}

@@ -1,0 +1,949 @@
+{
+    "research": [
+        {
+            "id": "res_5c3d95f3b22f",
+            "user_id": 3,
+            "topic": "Best practices for mobile navigation patterns?",
+            "scope": "ux_best_practices",
+            "category": "UX",
+            "provider": "openclaw",
+            "source": "ai",
+            "result": {
+                "title": "Best Practices for Mobile Navigation Patterns",
+                "summary": "Effective mobile navigation balances discoverability, screen real estate, and thumb reach. The strongest patterns keep primary destinations one tap away, group secondary actions in predictable, dismissible containers, and rely on platform conventions (iOS HIG, Material) so users transfer mental models across apps. Reserve gestures for power-user accelerators and always expose the same destination through a visible affordance so no function depends on a hidden gesture.",
+                "key_principles": [
+                    "Place primary navigation in the thumb zone (bottom 30-40% of the screen) so one-handed reach is comfortable.",
+                    "Make the current location obvious via persistent indicators (selected tab, breadcrumb, page title).",
+                    "Limit top-level destinations to 3-5 items; deeper hierarchy belongs in tabs, lists, or sheets.",
+                    "Respect platform conventions for iOS and Android before introducing custom chrome.",
+                    "Every navigation destination must be reachable by a visible affordance, not only by gesture."
+                ],
+                "do_list": [
+                    "Use a bottom tab bar for the 3-5 top-level destinations of an app and label every tab with both an icon and a word.",
+                    "Persist a top app bar or large title that signals where the user is and how to go back.",
+                    "Show the selected state on the active tab with a contrasting color or fill so users never lose orientation.",
+                    "Use bottom sheets or modal sheets for transient, task-focused flows (filters, composers, share).",
+                    "Match the back behavior to platform expectations (edge swipe on iOS, hardware\/gesture back on Android).",
+                    "Combine navigation patterns when they serve different goals, e.g. bottom tabs + contextual top tabs in a section.",
+                    "Test navigation with first-time users on a real device to surface hidden dead ends and missing affordances."
+                ],
+                "dont_list": [
+                    "Do not hide all navigation behind a hamburger menu on apps with frequent destinations; Baymard and Nielsen Norman Group research shows hidden menus reduce feature discoverability and engagement.",
+                    "Do not rely on gesture-only navigation (edge swipes, long-press, force touch) for primary destinations; pair them with a visible control.",
+                    "Do not put navigation in the top header alone when the app is used one-handed, since it sits outside the natural thumb zone.",
+                    "Do not use more than 5 top-level tabs; overflow becomes invisible and increases mis-taps.",
+                    "Do not mix tab-bar destinations with unrelated modal flows as if they were siblings.",
+                    "Do not change the navigation layout between sessions in ways that confuse return visits.",
+                    "Do not bury a destructive or frequent action inside an overflow menu when a primary button pattern (FAB, sticky CTA) fits."
+                ],
+                "patterns": [
+                    {
+                        "name": "Bottom Tab Bar",
+                        "description": "Persistent bar at the bottom of the screen with 3-5 icon+label destinations, exactly one of which is in the selected state.",
+                        "example": "Instagram, Spotify, Gmail, WhatsApp",
+                        "use_when": "The app has a small set of equally important, frequently visited sections the user moves between repeatedly within a session."
+                    },
+                    {
+                        "name": "Hamburger Menu (Side Drawer)",
+                        "description": "A drawer that slides in from the left edge, typically opened by a hamburger icon, listing secondary or infrequent destinations.",
+                        "example": "Gmail's earlier design, Uber's older side menu, many content-heavy utility apps",
+                        "use_when": "Most destinations are accessed rarely or by power users, and the bottom bar is reserved for primary actions. Avoid for consumer apps where engagement matters."
+                    },
+                    {
+                        "name": "Top App Bar with Large Title",
+                        "description": "A persistent header that collapses on scroll, displaying the current section title and contextual actions.",
+                        "example": "Apple Mail, Settings, Notion",
+                        "use_when": "Orientation to the current page and contextual actions (search, filter, compose) matter more than quick section-switching."
+                    },
+                    {
+                        "name": "Bottom Sheet \/ Modal Sheet",
+                        "description": "A panel that slides up from the bottom of the screen for a focused, dismissible task such as filters, composition, or previews.",
+                        "example": "Apple Maps location details, Google Maps filter sheet, Spotify Now Playing",
+                        "use_when": "A short task needs focus without losing the context underneath, or when surfacing options that do not deserve a dedicated screen."
+                    },
+                    {
+                        "name": "Floating Action Button (FAB)",
+                        "description": "A circular elevated button anchored bottom-right that represents the primary creation action for the current screen.",
+                        "example": "Gmail Compose, Google Keep, Material apps",
+                        "use_when": "The app's primary action (compose, add, new) is repeated across many screens and should remain one tap away regardless of context."
+                    },
+                    {
+                        "name": "Top Tabs \/ Segmented Control",
+                        "description": "A horizontal row of equal-weight tabs that switch between peer views of the same context.",
+                        "example": "Twitter\/X timeline tabs, Instagram profile tabs, Apple App Store segmented filters",
+                        "use_when": "Switching between sibling views of the same data set, and the categories are short enough to fit without scrolling."
+                    },
+                    {
+                        "name": "Hub-and-Spoke",
+                        "description": "A single home screen fans out to independent sections, with each section opening its own navigation stack.",
+                        "example": "Banking apps, Settings, many utility apps",
+                        "use_when": "Sections are unrelated and rarely cross-linked, and users typically complete one section per visit."
+                    },
+                    {
+                        "name": "Gesture Navigation with Visible Affordance",
+                        "description": "Edge swipes, long-press, or pull actions that accelerate common flows while a visible handle or hint educates users.",
+                        "example": "iOS edge-swipe back, Twitter pull-to-refresh, Tinder swipe cards",
+                        "use_when": "Speeding up a common flow for experienced users; pair the gesture with a discoverable button so first-time users are not stranded."
+                    },
+                    {
+                        "name": "Progressive Disclosure via 'More' Tab",
+                        "description": "A tab bar where the last item is 'More', opening a secondary list of less-frequent destinations.",
+                        "example": "Many early Android apps, App Store pre-iOS 14",
+                        "use_when": "More than 5 destinations exist and some are clearly secondary; retire this pattern in favor of a navigation drawer or grouped tabs when possible."
+                    },
+                    {
+                        "name": "Sticky Contextual CTA",
+                        "description": "A persistent button (often bottom-anchored) tied to the current screen, e.g. 'Save', 'Continue', 'Pay'.",
+                        "example": "Checkout flows, ride-hailing confirm, form-heavy apps",
+                        "use_when": "A primary action should remain reachable throughout a multi-step flow regardless of scroll position."
+                    }
+                ],
+                "metrics": [
+                    {
+                        "name": "Task completion rate",
+                        "target": "95%+ for core flows, 85%+ for secondary flows",
+                        "why": "Navigation that hides required steps lowers completion and revenue."
+                    },
+                    {
+                        "name": "Taps to complete core task",
+                        "target": "3 taps or fewer for top-level actions",
+                        "why": "Counts unnecessary navigation hops and dead ends."
+                    },
+                    {
+                        "name": "Time on task",
+                        "target": "Under the benchmark for the equivalent web task",
+                        "why": "Slow navigation is usually a sign of disorientation, not feature richness."
+                    },
+                    {
+                        "name": "Mis-tap rate on primary controls",
+                        "target": "Below 2%",
+                        "why": "Targets that are too close or unlabeled cause friction and erode trust."
+                    },
+                    {
+                        "name": "Discoverability rate",
+                        "target": "80%+ of users find a feature without prompting",
+                        "why": "Hiding destinations behind gestures or overflow menus silently kills adoption."
+                    },
+                    {
+                        "name": "Bounce \/ drop-off per navigation step",
+                        "target": "Identify and fix the single largest step",
+                        "why": "Pinpoints screens where users hesitate, go back, or abandon."
+                    },
+                    {
+                        "name": "System Usability Scale (SUS)",
+                        "target": "Above 80",
+                        "why": "Composite score that catches overall navigation friction in a few items."
+                    }
+                ],
+                "examples": [
+                    {
+                        "product": "Instagram",
+                        "feature": "Bottom tab bar with 5 destinations and a center FAB for create",
+                        "takeaway": "Reinforces the thumb zone and makes the primary action unmistakable on every screen."
+                    },
+                    {
+                        "product": "Spotify",
+                        "feature": "Bottom tab bar with Home, Search, Library, plus contextual top tabs inside Library",
+                        "takeaway": "Combines global navigation with section-local tabs to support both switching and filtering."
+                    },
+                    {
+                        "product": "Apple Mail",
+                        "feature": "Large collapsing title and persistent bottom compose button",
+                        "takeaway": "Always-visible context plus a sticky primary action for one-handed use."
+                    },
+                    {
+                        "product": "Uber",
+                        "feature": "Bottom tabs for Ride, Package, Reserve, Activity, Account",
+                        "takeaway": "Uses bottom tabs because the app is launched repeatedly for the same primary task."
+                    },
+                    {
+                        "product": "Gmail",
+                        "feature": "Bottom tab bar with a FAB for Compose",
+                        "takeaway": "A well-known migration from hamburger to tabs increased feature usage because destinations were no longer hidden."
+                    },
+                    {
+                        "product": "Google Maps",
+                        "feature": "Bottom sheet for place details that expands to half and full height",
+                        "takeaway": "Preserves map context while letting users drill into rich details without losing place."
+                    },
+                    {
+                        "product": "Twitter\/X",
+                        "feature": "Top tabs (For You \/ Following) inside the Home tab",
+                        "takeaway": "Sibling views of the same context belong in top tabs, not in the global bottom bar."
+                    }
+                ],
+                "references": [
+                    {
+                        "title": "iOS Human Interface Guidelines: Navigation",
+                        "source": "Apple Developer Documentation"
+                    },
+                    {
+                        "title": "Material Design 3: Navigation",
+                        "source": "Google Material Design"
+                    },
+                    {
+                        "title": "Hamburger Menus and Hidden Navigation Hurt UX Metrics",
+                        "source": "Nielsen Norman Group"
+                    },
+                    {
+                        "title": "Mobile Commerce Usability Research",
+                        "source": "Baymard Institute"
+                    },
+                    {
+                        "title": "Mobile First (book) and subsequent writings",
+                        "source": "Luke Wroblewski"
+                    },
+                    {
+                        "title": "Designing for Thumb Zone and One-Handed Use",
+                        "source": "Scott Hurff, UX Magazine"
+                    },
+                    {
+                        "title": "Touch Target Sizes for Mobile UI (44pt iOS \/ 48dp Material)",
+                        "source": "Apple HIG and Material Design"
+                    }
+                ],
+                "action_items": [
+                    "Audit your current app: list every top-level destination and confirm it is reachable within 2 taps via a visible control.",
+                    "Move primary navigation to the bottom of the screen and reserve the top header for context and page-level actions.",
+                    "Cap top-level destinations at 5; demote overflow items to a secondary list and verify discoverability with 5 first-time users.",
+                    "Add a sticky primary action (FAB, sticky CTA) for the most common task so it is one tap away on every relevant screen.",
+                    "Instrument navigation steps in analytics and fix the single largest drop-off in each core flow within the next release."
+                ],
+                "scope": "ux_best_practices",
+                "category": "UX"
+            },
+            "created_at": "2026-07-22 06:13:48"
+        },
+        {
+            "id": "res_45472181f147",
+            "user_id": 3,
+            "topic": "Best practices for mobile navigation patterns?",
+            "scope": "ux_best_practices",
+            "category": "UX",
+            "provider": "openclaw",
+            "source": "ai",
+            "result": {
+                "title": "Best Practices for Mobile Navigation Patterns",
+                "summary": "Effective mobile navigation prioritizes thumb-reach placement, persistent high-level structure, and recognition over recall. The strongest patterns combine a bottom tab bar for primary destinations with contextual secondary navigation such as bottom sheets, segmented controls, or drawers. Discoverability and learnability\u2014not visual minimalism\u2014are the deciding factors: hamburger-only menus and hidden gestures measurably reduce feature usage and task completion rates.",
+                "key_principles": [
+                    "Place high-frequency destinations within the thumb arc, typically the bottom third of the screen, and treat top bars as contextual rather than structural.",
+                    "Limit persistent primary navigation to 3\u20135 destinations to respect working memory and keep information architecture legible.",
+                    "Anchor users with consistent iconography, clear labels, and a visible current-location indicator on every primary destination.",
+                    "Favor progressive disclosure: surface core tasks in the main flow and push advanced or rare actions into sheets, menus, or detail screens.",
+                    "Back, undo, and exit must always be reachable; navigation should never trap the user in a dead-end or rely on the OS back button alone.",
+                    "Touch targets must meet platform minimums (44pt on iOS, 48dp on Android) with at least 8dp spacing between tappable controls."
+                ],
+                "do_list": [
+                    "Combine icons with short text labels for primary destinations, because icons alone increase mis-tap rates, especially on Android.",
+                    "Keep navigation persistent across the top-level hierarchy so users can switch context in a single tap without backtracking.",
+                    "Use platform-native gestures such as edge-swipe back on iOS and Android to align with user expectations formed by the OS.",
+                    "Reflect the current location with color, fill state, weight, or position so users always know where they are in the IA.",
+                    "Provide a FAB or top-level CTA for the single most important create\/add action when the product has a dominant verb.",
+                    "Test every flow against a 'three-tap rule': each primary feature must be reachable within three taps from cold launch."
+                ],
+                "dont_list": [
+                    "Do not rely on a hamburger menu as the only path to primary features; promote real primary destinations to a visible tab bar instead.",
+                    "Do not place critical, frequently used actions in the top bar alone, because that region is the hardest thumb-reach zone on phones.",
+                    "Do not ship gesture-only navigation without visible affordances or onboarding hints, because hidden gestures tank discoverability.",
+                    "Do not cram more than five items into a bottom bar; route overflow through a 'More' tab or a secondary drawer.",
+                    "Do not mix navigation idioms mid-flow (e.g., tab bar on some screens, drawer on others) without a clear, intentional reason.",
+                    "Do not ship flows without a visible back affordance or flows that depend on the device back button to exit cleanly."
+                ],
+                "patterns": [
+                    {
+                        "name": "Bottom Tab Bar",
+                        "description": "Persistent 3\u20135 item bar fixed to the bottom, each entry represented by an icon plus label with a visible current-location indicator.",
+                        "example": "Instagram, Spotify, Slack, WhatsApp, and most modern social or productivity apps.",
+                        "use_when": "You have 3\u20135 equally important top-level destinations that users frequently switch between during a session."
+                    },
+                    {
+                        "name": "Navigation Drawer (Hamburger \/ Side Rail)",
+                        "description": "Off-canvas panel that slides in from the leading edge, listing destinations as rows with icons and labels.",
+                        "example": "Gmail, Google Drive, and many admin or dashboard-style apps with a broad, flat IA.",
+                        "use_when": "You have more than five destinations, infrequent context switching, or a need to preserve content real estate."
+                    },
+                    {
+                        "name": "Top App Bar with Segmented Control or Tabs",
+                        "description": "Page-level header carrying a title, contextual actions, and a horizontal pill control for sub-views within the current destination.",
+                        "example": "Settings apps, news readers, analytics dashboards, and apps whose primary destinations sit below a sub-tab layer.",
+                        "use_when": "You need fast switching between sub-views inside one primary destination, such as Inbox \/ Today \/ Scheduled."
+                    },
+                    {
+                        "name": "Floating Action Button Anchored to the Bottom Nav",
+                        "description": "Prominent circular button sitting in or above the bottom bar that represents the single primary create action.",
+                        "example": "Gmail Compose, WhatsApp New Chat, and most Material Design reference apps.",
+                        "use_when": "One creation verb (compose, post, add) clearly dominates the product and complements rather than replaces the tab bar."
+                    },
+                    {
+                        "name": "Bottom Sheet (Peek \/ Half \/ Full)",
+                        "description": "Modal sheet that slides up from the bottom, optionally with a drag handle, presenting contextual actions or detail in escalating states.",
+                        "example": "Apple Maps location details, Spotify Now Playing, and iOS\/Android share sheets.",
+                        "use_when": "You need to surface options, filters, or rich detail without dropping the user out of their underlying context."
+                    },
+                    {
+                        "name": "Edge-Swipe Back Gesture",
+                        "description": "System-level gesture for reversing navigation: Android predictive back and iOS edge swipe back, plus in-app horizontal swipe-back.",
+                        "example": "Native iOS apps, Android apps following predictive back, and Twitter\/X-style in-app back swipe.",
+                        "use_when": "You build native or cross-platform flows where matching OS expectations is non-negotiable."
+                    },
+                    {
+                        "name": "Card \/ Tile Hub Home",
+                        "description": "Home screen of large tappable cards representing product sections, with persistent access to a smaller secondary nav.",
+                        "example": "Chase, Airbnb, and many super-apps in Asia such as Grab and WeChat.",
+                        "use_when": "Your IA is shallow, destinations are relatively independent, and per-session visits per destination are low."
+                    },
+                    {
+                        "name": "Floating Pill Bar (iOS-style Capsule)",
+                        "description": "Floating capsule at the bottom containing a small number of items, lighter than a full-width tab bar.",
+                        "example": "iOS Mail, Music, and Photos bottom bars in recent OS releases.",
+                        "use_when": "You want less visual chrome in the bottom region while still keeping primary navigation inside the thumb arc."
+                    }
+                ],
+                "metrics": [
+                    {
+                        "name": "Discoverability rate",
+                        "target": ">70% of users locate a target feature without prompting within a 5-second or first-click test",
+                        "why": "Direct measure of whether navigation reveals structure without help; a leading indicator of feature adoption and learnability."
+                    },
+                    {
+                        "name": "Taps to core task",
+                        "target": "\u22643 taps from cold launch to any primary task completion on critical flows",
+                        "why": "Quantifies IA depth and friction in the happy path; flags flows that bury high-value features."
+                    },
+                    {
+                        "name": "Mis-tap and back-track rate",
+                        "target": "<10% of sessions use the system back button to recover from a wrong destination",
+                        "why": "Indicates touch-target size, target spacing, and label clarity; a high rate points to IA confusion or poor affordances."
+                    },
+                    {
+                        "name": "Task success \/ completion rate",
+                        "target": ">90% on designated critical flows, benchmarked per platform",
+                        "why": "Captures whether navigation actually enables users to reach their goal, not just to navigate around."
+                    },
+                    {
+                        "name": "Time on task",
+                        "target": "Trend down after each IA revision; no regression greater than 15% across releases",
+                        "why": "Reflects efficiency gains from simplifying navigation; sensitive to added modal steps and new layers."
+                    },
+                    {
+                        "name": "Bottom-bar engagement share",
+                        "target": ">60% of session taps occur in the bottom 30% of the viewport",
+                        "why": "Validates thumb-zone placement; if top bars dominate, primary destinations are likely misplaced."
+                    },
+                    {
+                        "name": "Suspended task rate",
+                        "target": "<20% of started flows abandoned before completion",
+                        "why": "Friction in navigation (modals, dead ends, lost context) typically surfaces first as task abandonment."
+                    }
+                ],
+                "examples": [
+                    {
+                        "product": "Instagram",
+                        "feature": "5-item bottom tab bar: Home, Search, Create, Activity, Profile",
+                        "takeaway": "Canonical bottom-bar pattern: limited top-level destinations, paired icons and labels, and a central action slot for the dominant verb."
+                    },
+                    {
+                        "product": "Spotify",
+                        "feature": "Persistent bottom bar plus a mini-player that expands into a full-screen bottom sheet",
+                        "takeaway": "Demonstrates layering a contextual, sticky feature over the main tab bar without forcing users to leave the destination they came from."
+                    },
+                    {
+                        "product": "Gmail",
+                        "feature": "Bottom tab bar (Inbox, Starred, Sent, etc.) with an anchored Compose FAB",
+                        "takeaway": "Validates the FAB-on-bottom-nav pairing for a high-frequency creation action; discoverability is dramatically higher than menu-only compose."
+                    },
+                    {
+                        "product": "Apple Maps",
+                        "feature": "Bottom-sheet detail cards with drag handles in peek \/ half \/ full states",
+                        "takeaway": "Shows progressive disclosure: a peek invites exploration, a full sheet commits the user to detail without losing the map context."
+                    },
+                    {
+                        "product": "TikTok",
+                        "feature": "Immersive full-screen feed with hidden navigation, restored by edge swipe",
+                        "takeaway": "Proves that gestural navigation can work when the primary action (view) dominates and chrome becomes noise, but only with strong onboarding."
+                    },
+                    {
+                        "product": "Chase Mobile",
+                        "feature": "Card-tile home hub for accounts and common actions",
+                        "takeaway": "Hub navigation scales better than a long tab bar when destinations are numerous and visits per session are few."
+                    },
+                    {
+                        "product": "Slack",
+                        "feature": "Bottom tab bar plus a workspace switcher reachable from the header",
+                        "takeaway": "Shows how to handle cross-context navigation without cluttering the primary tab bar."
+                    },
+                    {
+                        "product": "WhatsApp",
+                        "feature": "Bottom tab bar (Status, Calls, Camera, Chats, Settings) with floating new-chat FAB",
+                        "takeaway": "Demonstrates that five is a comfortable upper limit for primary destinations and that a FAB-style CTA preserves chrome for parity."
+                    }
+                ],
+                "references": [
+                    {
+                        "title": "Material Design 3 \u2014 Navigation Patterns",
+                        "source": "Google Material Design guidelines (m3.material.io)"
+                    },
+                    {
+                        "title": "Human Interface Guidelines \u2014 Navigation (iOS \/ iPadOS)",
+                        "source": "Apple Developer documentation"
+                    },
+                    {
+                        "title": "Hamburger Menus and Hidden Navigation Harm UX",
+                        "source": "Nielsen Norman Group research summary"
+                    },
+                    {
+                        "title": "Designing Mobile Interfaces \u2014 Touch Zones and Thumb Reach",
+                        "source": "Steven Hoober, O'Reilly"
+                    },
+                    {
+                        "title": "Mobile Navigation: Don't Use a Hamburger Menu",
+                        "source": "Luke Wroblewski, A List Apart"
+                    },
+                    {
+                        "title": "Mobile UX: Bottom Navigation Pattern",
+                        "source": "Baymard Institute usability reports"
+                    },
+                    {
+                        "title": "Fitts's Law Applied to Mobile Touch Targets",
+                        "source": "Smashing Magazine UX research articles"
+                    },
+                    {
+                        "title": "Mobile Information Architecture Best Practices",
+                        "source": "NN\/g reports on mobile IA"
+                    }
+                ],
+                "action_items": [
+                    "Audit existing navigation against thumb-zone rules: list every destination reachable only from the top bar and decide whether each one deserves a bottom-tab slot.",
+                    "Run a five-second or first-click test with at least five users per primary persona to measure discoverability of the top flows.",
+                    "Verify a three-tap rule for every primary feature from cold launch; document any flow that fails and prioritize deeper IA work there.",
+                    "Confirm touch targets meet 44pt (iOS) and 48dp (Android) minimums with at least 8dp spacing between tappable controls; automate a design-system lint if possible.",
+                    "Add persistent bottom navigation to main screens if missing, and ensure every top-level destination carries a clear current-state indicator.",
+                    "Provide a visible affordance and an on-screen label for any gesture used in core flows; never rely on hidden gestures for critical tasks.",
+                    "Instrument the app to capture taps-to-task, back-button recovery, and bottom-bar engagement share; review the metrics quarterly to detect IA drift.",
+                    "Establish a navigation design-system component (tab bar, drawer, sheet, FAB) with documented variants so new features default to consistent, well-tested patterns."
+                ],
+                "scope": "ux_best_practices",
+                "category": "UX"
+            },
+            "created_at": "2026-07-22 06:14:46"
+        },
+        {
+            "id": "res_3d80503211c3",
+            "user_id": 3,
+            "topic": "How to improve form UX on checkout flows?",
+            "scope": "ux_best_practices",
+            "category": "UX",
+            "provider": "openclaw",
+            "source": "ai",
+            "result": {
+                "title": "Checkout Form UX: Reducing Friction to Lift Conversion",
+                "summary": "Checkout form friction is the single largest driver of cart abandonment. Reducing it requires progressive disclosure, inline validation, autofill optimization, and trust signals positioned where hesitation peaks. The best checkout flows minimize typing, never punish users for correcting errors, and let returning customers skip entire steps entirely.",
+                "key_principles": [
+                    "Minimize typing: every keystroke is a leak point, so use autofill, address lookup, smart defaults, and stored payment methods.",
+                    "Show progress and orient the user: visible step indicators and clear running totals reduce abandonment more than any visual polish.",
+                    "Build trust at decision points: place security badges, return policy, and total cost beside the Pay button, not the cart."
+                ],
+                "do_list": [
+                    "Enable browser autofill via correct autocomplete attributes (name, email, street-address, cc-number) and address-lookup APIs like Google Places or Loqate.",
+                    "Validate inline on blur with specific, human error messages placed next to the field; never rely on submit alone and never clear entered data.",
+                    "Persist entered data across steps and offer a guest checkout path with optional post-purchase account creation."
+                ],
+                "dont_list": [
+                    "Don't force account creation before purchase, since guest checkout with post-purchase upsell converts materially better.",
+                    "Don't show errors only after submit, and never clear the form when validation fails.",
+                    "Don't hide shipping, tax, or the total until the final step, since surprise charges are the top documented abandonment trigger."
+                ],
+                "patterns": [
+                    {
+                        "name": "One-page accordion checkout",
+                        "description": "All checkout sections on a single URL, each collapsible, with a persistent order summary sidebar.",
+                        "example": "Apple Store checkout, Reformation",
+                        "use_when": "Mobile-first audiences, flaky networks, or when users frequently switch between devices mid-purchase."
+                    },
+                    {
+                        "name": "Stepped linear checkout",
+                        "description": "Three or four distinct steps (Contact, Ship, Pay) with a visible progress bar and explicit Back and Next controls.",
+                        "example": "Shopify default checkout, Stripe Checkout",
+                        "use_when": "Desktop-heavy audiences, complex B2B carts, or markets where users expect a guided, page-by-page flow."
+                    },
+                    {
+                        "name": "Express wallet checkout",
+                        "description": "Apple Pay, Google Pay, Shop Pay, and PayPal buttons placed above the email field for one-tap completion.",
+                        "example": "Shop Pay, Amazon Pay, Link by Stripe",
+                        "use_when": "Mobile commerce and any audience with a meaningful share of returning customers."
+                    }
+                ],
+                "metrics": [
+                    {
+                        "name": "Form completion rate per step",
+                        "target": "Above 85% per step and above 70% end-to-end",
+                        "why": "Pinpoints exactly where friction concentrates so redesign effort targets the worst step first."
+                    },
+                    {
+                        "name": "Time to complete checkout",
+                        "target": "Under 90 seconds for returning customers, under 3 minutes for new",
+                        "why": "Slow flows correlate with abandonment, support tickets, and lower lifetime value."
+                    },
+                    {
+                        "name": "Field-level error rate",
+                        "target": "Below 5% per field",
+                        "why": "High rates flag confusing labels, validation rules, or input methods that need rewriting."
+                    }
+                ],
+                "examples": [
+                    {
+                        "product": "Amazon",
+                        "feature": "1-Click ordering",
+                        "takeaway": "Pre-stored payment and address remove the form entirely for returning users and set the ceiling for what checkout UX can achieve."
+                    },
+                    {
+                        "product": "Shopify Shop Pay",
+                        "feature": "Biometric express checkout",
+                        "takeaway": "Fingerprint and face-auth checkout lift mobile conversion by roughly 50% compared with form-based flows."
+                    },
+                    {
+                        "product": "Stripe Checkout",
+                        "feature": "Link autofill wallet",
+                        "takeaway": "A networked autofill layer across merchants cuts typing to near zero for repeat shoppers and reduces drop-off at the email field."
+                    }
+                ],
+                "references": [
+                    {
+                        "title": "Baymard Institute: Checkout Usability Research",
+                        "source": "baymard.com\/checkout-usability"
+                    },
+                    {
+                        "title": "Nielsen Norman Group: E-Commerce User Experience",
+                        "source": "nngroup.com\/topic\/e-commerce"
+                    },
+                    {
+                        "title": "Google Web Fundamentals: Payment and Address Forms",
+                        "source": "developers.google.com\/web\/fundamentals\/payments"
+                    }
+                ],
+                "action_items": [
+                    "Audit the current checkout funnel in analytics to identify the single highest drop-off step, then redesign only that step before touching anything else.",
+                    "Add correct autocomplete attributes to every field and verify browser autofill works in Chrome, Safari, and Firefox on both desktop and mobile.",
+                    "Implement inline validation with field-level error text and place an express-pay button (Apple Pay or Google Pay) above the email field."
+                ],
+                "scope": "ux_best_practices",
+                "category": "UX"
+            },
+            "created_at": "2026-07-22 06:15:09"
+        },
+        {
+            "id": "res_5e94bfdf1c2c",
+            "user_id": 3,
+            "topic": "How to improve form UX on checkout flows?",
+            "scope": "ux_best_practices",
+            "category": "UX",
+            "provider": "openclaw",
+            "source": "ai",
+            "result": {
+                "title": "Improving Form UX in Checkout Flows",
+                "summary": "Checkout forms are the highest-leverage point in any purchase funnel: every unnecessary field, confusing label, or hidden cost correlates directly with abandonment. Best-in-class checkout UX reduces required input, leverages known user data, validates inline, and signals trust at every step. The goal is to compress effort while expanding perceived control, balancing speed, accuracy, and reassurance.",
+                "key_principles": [
+                    "Minimize cognitive load: ask only what is strictly required to complete the transaction, and sequence fields in the order users expect.",
+                    "Eliminate redundant input: leverage browser autofill, address autocomplete, geolocation, and account history to prefill values wherever possible.",
+                    "Signal trust continuously: visible security marks, transparent pricing, persistent order summaries, and reversible actions reduce purchase anxiety.",
+                    "Validate proactively and gracefully: catch errors inline with corrective guidance, never punish users by wiping their input on submit.",
+                    "Design for mobile first: touch targets, keyboards, viewport constraints, and express wallets must work flawlessly on small screens."
+                ],
+                "do_list": [
+                    "Use semantic input types (tel, email, cc-number, postal-code) so mobile keyboards and browser autofill activate correctly.",
+                    "Validate inline on blur with positive confirmation (green check), and reserve aggressive submit-time validation as a safety net.",
+                    "Persist the order summary, including tax, shipping, and discounts, in view at all times; never hide the total until the last step.",
+                    "Offer guest checkout by default and treat account creation as an optional post-purchase step with a single checkbox.",
+                    "Surface express payment options (Apple Pay, Google Pay, PayPal, Shop Pay, Link) above the card form for returning and mobile users.",
+                    "Label fields persistently above or beside inputs; keep helper text, format hints, and error messages close to the field they describe.",
+                    "Provide an obvious way to edit earlier steps (clickable stepper, expandable accordions) without forcing a full restart.",
+                    "Show security indicators (padlock, PCI badge, trusted-provider logos) near the payment form, not buried in the footer."
+                ],
+                "dont_list": [
+                    "Don't require account creation before allowing purchase; mandatory sign-up is one of the top abandonment triggers.",
+                    "Don't use placeholder text as the only label \u2014 it disappears on focus, breaks screen readers, and hurts accessibility.",
+                    "Don't reveal shipping cost, tax, or fees only at the final step; show estimates from the shipping step onward.",
+                    "Don't reset or wipe fields after a validation error; preserve every keystroke and surface the precise problem.",
+                    "Don't force a multi-step flow on mobile when a single well-designed page converts better for low-to-mid complexity carts.",
+                    "Don't open country or state dropdowns that require two clicks when typeahead or smart default from IP works in one.",
+                    "Don't hide the 'back' affordance; users must be able to correct shipping or address without losing cart state."
+                ],
+                "patterns": [
+                    {
+                        "name": "Express Checkout (Wallet First)",
+                        "description": "Place Apple Pay, Google Pay, PayPal, and Link buttons above the contact step so returning users complete purchase with a single biometric tap.",
+                        "example": "Shopify Checkout, Apple Store, most modern DTC brands.",
+                        "use_when": "Returning traffic is significant, mobile share is high, and PCI-compliant wallet integrations are available."
+                    },
+                    {
+                        "name": "Single-Page Checkout",
+                        "description": "All sections (contact, shipping, payment) visible on one scrollable page with a sticky order summary; user can complete in any order.",
+                        "example": "Stripe Checkout, Recharge, many SaaS-to-DTC brands.",
+                        "use_when": "Required fields are under 12, cart complexity is low-to-mid, and mobile share dominates."
+                    },
+                    {
+                        "name": "Multi-Step Accordion \/ Stepper",
+                        "description": "Explicit progress indicator (1. Contact, 2. Shipping, 3. Payment) with each step expanded in sequence; completed steps collapse to a summary line that remains editable.",
+                        "example": "Magento default checkout, many B2B and large-catalog retailers.",
+                        "use_when": "High field count, conditional shipping\/tax logic, B2B purchase orders, or when each step is conceptually distinct."
+                    },
+                    {
+                        "name": "Inline Validation",
+                        "description": "Validate fields on blur; show a green check on valid input and a red message with corrective guidance on invalid input. Never validate empty fields aggressively as users type.",
+                        "example": "Stripe Elements, modern SaaS signup forms, Apple ID account creation.",
+                        "use_when": "Always \u2014 combine with submit-time validation as a safety net and avoid validating fields the user has not yet touched."
+                    },
+                    {
+                        "name": "Address Autocomplete + Geolocation Defaults",
+                        "description": "Prefill country, state\/province, and city from IP geolocation; provide a typeahead powered by Google Places, Loqate, or Smarty for line-2 details and postal codes.",
+                        "example": "Shopify, Amazon, Uber Eats checkout.",
+                        "use_when": "Always when physical shipping is required; cuts typing dramatically and reduces address errors that cause delivery failures."
+                    },
+                    {
+                        "name": "Persistent Sticky Order Summary",
+                        "description": "Order summary fixed to the right rail (desktop) or a collapsible top\/bottom drawer (mobile), updating totals in real time as shipping, promo, and quantity change.",
+                        "example": "Apple Store, Wayfair, Amazon, Target.",
+                        "use_when": "Cart contains more than two items, has variable shipping costs, or promo codes can be applied late in the flow."
+                    },
+                    {
+                        "name": "Smart Defaults from Account and History",
+                        "description": "Prefill name, email, and last-used address and payment method for logged-in users; surface a 'use last shipping address' shortcut for returning customers.",
+                        "example": "Amazon's 'Buy now with 1-Click', Stripe Customer objects, Shopify customer accounts.",
+                        "use_when": "Repeat-purchase frequency is meaningful and the cost of prefilling wrong is low (always confirmed by user)."
+                    },
+                    {
+                        "name": "Progressive Disclosure of Optional Fields",
+                        "description": "Hide non-essential inputs (gift message, delivery instructions, marketing opt-in) behind a single 'Add details' or 'Order notes' toggle to keep the primary path lean.",
+                        "example": "Apple Store, Bon App\u00e9tit recipe checkout, most modern booking flows.",
+                        "use_when": "A small percentage of users need optional fields, but they are not on the critical path for the majority."
+                    }
+                ],
+                "metrics": [
+                    {
+                        "name": "Checkout completion rate",
+                        "target": "\u2265 65% (Baymard industry median is ~50%)",
+                        "why": "Direct measure of overall friction; aggregating field-level drops reveals systemic issues versus one-off problems."
+                    },
+                    {
+                        "name": "Field-level abandonment rate",
+                        "target": "< 15% drop at any single field",
+                        "why": "Pinpoints the specific fields causing friction (e.g., a confusing CVV or state dropdown)."
+                    },
+                    {
+                        "name": "Time to complete checkout",
+                        "target": "< 90s for returning users, < 180s for new users",
+                        "why": "Correlates strongly with conversion; long times signal unnecessary steps, slow validation, or layout issues."
+                    },
+                    {
+                        "name": "Form error rate per field",
+                        "target": "< 5% per field",
+                        "why": "High rates indicate unclear labels, poor input masks, or validation messages that don't match user expectations."
+                    },
+                    {
+                        "name": "Express payment adoption",
+                        "target": "30\u201350% of completed checkouts use a wallet button",
+                        "why": "Proves express options are earning their placement and reducing typing for the majority."
+                    },
+                    {
+                        "name": "Mobile vs desktop conversion parity",
+                        "target": "Mobile conversion \u2265 80% of desktop",
+                        "why": "Mobile users face the most friction; parity indicates the form is keyboard-, autofill-, and viewport-optimized."
+                    },
+                    {
+                        "name": "Cart abandonment rate at checkout entry",
+                        "target": "< 30%",
+                        "why": "Catches design issues that scare users before they even start typing (e.g., surprise fees, mandatory accounts, low trust signals)."
+                    }
+                ],
+                "examples": [
+                    {
+                        "product": "Amazon",
+                        "feature": "1-Click ordering",
+                        "takeaway": "Eliminates the form entirely for known customers; demonstrates the upper bound of friction removal and why account-based defaults matter."
+                    },
+                    {
+                        "product": "Apple Store",
+                        "feature": "Sticky right-rail summary with Apple Pay default",
+                        "takeaway": "Persistent visibility of cost builds trust; Apple Pay minimizes input to a biometric tap on mobile."
+                    },
+                    {
+                        "product": "Shopify Checkout",
+                        "feature": "Wallet buttons above email field + address autocomplete",
+                        "takeaway": "Returning customers complete checkout in under 30 seconds; first-time buyers see a tight 3-step flow with clear progress."
+                    },
+                    {
+                        "product": "Stripe Checkout",
+                        "feature": "Single-page with inline validation and Link autofill",
+                        "takeaway": "Progressive enhancement of fields, real-time validation, and Link reduce both errors and abandonment."
+                    },
+                    {
+                        "product": "Wayfair",
+                        "feature": "Persistent order summary with shipping estimator",
+                        "takeaway": "Lets users adjust cart without leaving checkout \u2014 reduces surprise costs and recovers potentially lost sales."
+                    },
+                    {
+                        "product": "Uber Eats",
+                        "feature": "Geolocation-driven address prefilling and minimal checkout",
+                        "takeaway": "Trust + speed: knowing the user already removed most typing, leaving only payment confirmation."
+                    }
+                ],
+                "references": [
+                    {
+                        "title": "Baymard Institute \u2014 Checkout Usability Research",
+                        "source": "baymard.com\/research\/checkout-usability"
+                    },
+                    {
+                        "title": "Nielsen Norman Group \u2014 E-Commerce User Experience",
+                        "source": "nngroup.com\/topic\/ecommerce\/"
+                    },
+                    {
+                        "title": "Google Web Fundamentals \u2014 Design Effective Forms and Payment UX",
+                        "source": "developers.google.com\/web\/fundamentals\/design-and-ux\/forms"
+                    },
+                    {
+                        "title": "Stripe Documentation \u2014 Checkout Best Practices",
+                        "source": "stripe.com\/docs\/payments\/checkout"
+                    },
+                    {
+                        "title": "WCAG 2.2 \u2014 Form Accessibility and Input Guidelines",
+                        "source": "w3.org\/WAI\/standards-guidelines\/wcag\/"
+                    },
+                    {
+                        "title": "Shopify UX Research \u2014 Reducing Checkout Friction",
+                        "source": "shopify.com\/research"
+                    }
+                ],
+                "action_items": [
+                    "Audit the current checkout funnel with session recordings and field-level analytics to identify the top three drop-off fields and their error rates.",
+                    "Implement semantic input types and full autocomplete attributes (name, email, street-address, postal-code, cc-number, cc-exp) across every checkout field, and integrate a verified address lookup (Google Places, Loqate, or Smarty).",
+                    "Add at least one express payment option (Apple Pay and Google Pay for mobile, PayPal or Link for desktop) prominently above the card form and measure adoption.",
+                    "Replace placeholder-as-label patterns with persistent visible labels; add inline validation on blur with corrective messaging that preserves all user input.",
+                    "Run an A\/B test comparing the current multi-step flow against a single-page variant with a sticky order summary for mobile users, measuring completion rate and time-to-checkout."
+                ],
+                "scope": "ux_best_practices",
+                "category": "UX"
+            },
+            "created_at": "2026-07-22 06:16:14"
+        },
+        {
+            "id": "res_6610a0c9d356",
+            "user_id": 3,
+            "topic": "UX Best Practices",
+            "scope": "ux_best_practices",
+            "category": "UX",
+            "provider": "openclaw",
+            "source": "ai",
+            "result": {
+                "title": "UX Best Practices: A Field Guide for Product Teams",
+                "summary": "Effective UX is the practice of shaping a product so that the right people can do the right things, easily, quickly, and with confidence. The strongest teams treat UX as an evidence-based discipline grounded in observed user behavior, well-tested heuristics, and continuous iteration rather than opinion or aesthetic preference. This brief distills the most widely accepted principles across user research, information architecture, interaction design, and usability evaluation into actionable guidance.",
+                "key_principles": [
+                    "User-centered design: every decision should be traceable to observed user behavior, jobs-to-be-done, or validated heuristics \u2014 not stakeholder opinion alone.",
+                    "Recognition over recall: make objects, actions, and options visible so users do not have to remember information across screens (Nielsen Heuristic 6).",
+                    "Consistency and standards: follow platform conventions so users can transfer expectations from one part of the product to another (Nielsen Heuristic 4).",
+                    "Hierarchy and progressive disclosure: chunk information, prioritize the most important content, and reveal depth on demand to manage cognitive load.",
+                    "Immediate feedback and clear affordance: every user action must produce a perceivable response within ~100ms for direct manipulation, ~1s for simple queries, with explicit feedback for longer waits (Nielsen Heuristic 1).",
+                    "Error prevention and graceful recovery: prevent problems where possible, surface clear errors when they occur, and always support undo for destructive actions (Nielsen Heuristics 5 & 9).",
+                    "Accessibility is a baseline: design for keyboard, screen reader, color-independent state, and cognitive variation from the start \u2014 not as a retrofit (WCAG 2.2 AA).",
+                    "Match between system and real world: use the user's vocabulary, mental models, and conventions from their world rather than system-oriented terms (Nielsen Heuristic 2)."
+                ],
+                "do_list": [
+                    "Run qualitative user research early (5\u20138 contextual interviews) to map jobs-to-be-done, mental models, and pain points before designing flows.",
+                    "Run a usability test with 5 users per round \u2014 Nielsen's research shows ~85% of usability issues are uncovered by the first 5 testers, with diminishing returns after that.",
+                    "Validate forms inline as the user types or blurs a field, not only on submit, and write error messages that explain the problem and the fix.",
+                    "Provide undo (and redo) for any destructive or hard-to-reverse action; prefer soft delete with a 5\u201330 second undo window for irreversible-feeling operations.",
+                    "Design for keyboard, touch, and screen reader from day one; tab order must follow visual order, and focus states must be visible at \u22653:1 contrast.",
+                    "Show system status during waits longer than 1 second: skeletons for content loading, progress indicators for determinate work, and an estimated time or cancel option for waits over 10 seconds.",
+                    "Establish a single source of truth for design tokens (color, spacing, typography, motion) and reuse them \u2014 visual consistency is a leading indicator of perceived quality.",
+                    "Measure outcomes, not just outputs: track task success rate, time on task, error rate, and System Usability Scale (SUS) at least quarterly."
+                ],
+                "dont_list": [
+                    "Don't redesign platform conventions (browser back, system scroll, native select on mobile, swipe-to-go-back on iOS) \u2014 violating them costs more than it saves.",
+                    "Don't hide critical actions behind hover-only states on touch devices or for keyboard users; if an action matters, give it a persistent or focusable affordance.",
+                    "Don't rely on color alone to convey state \u2014 pair color with an icon, label, or pattern to remain accessible to color-blind users (~8% of men, ~0.5% of women).",
+                    "Don't show errors without remediation: every error message must say what went wrong, why, and what the user can do next.",
+                    "Don't require account creation before demonstrating core value \u2014 let users reach an 'aha' moment in under 60 seconds, then gate advanced features behind signup.",
+                    "Don't punish the user for backend latency with silent spinners longer than ~10 seconds; offer a cancel, a retry, or a fallback.",
+                    "Don't ship a UI change without a rollback plan or feature flag \u2014 every visual change should be reversible in under 5 minutes."
+                ],
+                "patterns": [
+                    {
+                        "name": "Progressive Disclosure",
+                        "description": "Reveal advanced or rarely-used options only when the user signals interest, keeping the default surface focused.",
+                        "example": "Gmail shows 'Reply' by default but hides 'Reply all' and 'Forward' behind a dropdown until clicked.",
+                        "use_when": "Forms or screens have optional fields, advanced settings, or detail that would overwhelm the default view."
+                    },
+                    {
+                        "name": "Breadcrumb Navigation",
+                        "description": "Display the user's location within the site hierarchy as a horizontal trail of links, with the current page non-clickable.",
+                        "example": "Shopify admin shows 'Products > All products > Winter jacket' so merchants always know where they are.",
+                        "use_when": "The product has a deep information architecture (3+ levels) and users land on pages from search or external links."
+                    },
+                    {
+                        "name": "Inline Validation",
+                        "description": "Validate individual fields as the user finishes typing or blurs the field, with specific, actionable error text under the input.",
+                        "example": "Stripe's checkout validates card number, expiry, and CVC in real time, highlighting the field in red with a one-line explanation.",
+                        "use_when": "Any form, especially payment, signup, or settings \u2014 reduces error rate and form abandonment."
+                    },
+                    {
+                        "name": "Empty States with a Next Action",
+                        "description": "Treat empty states as a first-class design moment: explain why the area is empty, illustrate what it will look like, and offer one clear primary action.",
+                        "example": "Notion shows 'No pages yet \u2014 create your first page' with an illustration and a single primary button on a brand-new workspace.",
+                        "use_when": "Any list, table, dashboard, or inbox at zero state \u2014 also useful for filtered-to-empty and error states."
+                    },
+                    {
+                        "name": "Command Palette (Cmd\/Ctrl-K)",
+                        "description": "A keyboard-driven, fuzzy-search launcher that exposes every navigable action in the product from a single input.",
+                        "example": "Linear, GitHub, and Vercel all use Cmd-K to jump between projects, run commands, and invoke features faster than mouse navigation.",
+                        "use_when": "Power-user tools with more than ~20 navigable destinations or frequent multi-step actions."
+                    },
+                    {
+                        "name": "Optimistic UI with Rollback",
+                        "description": "Apply the user's intended change immediately on the client, then reconcile with the server; revert if the server rejects the change.",
+                        "example": "Slack shows a sent message instantly and replaces it with an error toast if delivery fails after retry.",
+                        "use_when": "Latency-sensitive actions (likes, comments, status changes) where perceived speed matters more than guaranteed confirmation."
+                    },
+                    {
+                        "name": "Skeleton Screens",
+                        "description": "Render a low-fidelity placeholder matching the final layout while content loads, instead of a generic spinner.",
+                        "example": "LinkedIn's feed shows grey avatar and text bars while posts stream in, reducing perceived wait time.",
+                        "use_when": "Loading content that will populate the same layout shape, especially above-the-fold and on slow networks."
+                    },
+                    {
+                        "name": "Modal vs. Side Sheet (Drawer)",
+                        "description": "Use modals only for short, focused, blocking tasks (confirmations, single-field edits). Use side sheets for contextual details that benefit from the parent page remaining visible.",
+                        "example": "Linear uses a side sheet to show issue details while keeping the backlog list visible in the background.",
+                        "use_when": "Choosing between the two \u2014 default to side sheets; reserve modals for destructive confirmations or required-attention flows."
+                    },
+                    {
+                        "name": "Sticky Filters and Sort",
+                        "description": "Pin filter and sort controls so they remain visible while the user scrolls through long result sets, with active filter chips showing what is applied.",
+                        "example": "Amazon keeps the filter sidebar visible while scrolling product lists and shows removable filter chips above results.",
+                        "use_when": "Any list, table, or search results page longer than ~3 viewport heights."
+                    },
+                    {
+                        "name": "Card-based Sorting with Drag Handles",
+                        "description": "Represent reorderable items as cards with a dedicated drag handle (not the whole card) and clear drop-zone indicators.",
+                        "example": "Trello and Jira let users drag cards between columns with a 6-dot grip icon and an animated drop indicator.",
+                        "use_when": "Users need to reorder, prioritize, or move items between states frequently."
+                    }
+                ],
+                "metrics": [
+                    {
+                        "name": "Task Success Rate",
+                        "target": "\u2265 90% for core flows on first attempt",
+                        "why": "Direct measure of whether users can complete the most important jobs in the product."
+                    },
+                    {
+                        "name": "Time on Task",
+                        "target": "Set per-flow baseline; reduce by 20% quarter over quarter",
+                        "why": "Tracks friction; long times often indicate unclear labels, missing affordances, or excessive steps."
+                    },
+                    {
+                        "name": "Error Rate",
+                        "target": "< 5% per critical form",
+                        "why": "Captures misclicks, validation failures, and confusion \u2014 the leading indicator of usability debt."
+                    },
+                    {
+                        "name": "System Usability Scale (SUS)",
+                        "target": "\u2265 80 (above average; 'good' UX)",
+                        "why": "Validated 10-question standardized scale that lets you benchmark against thousands of products."
+                    },
+                    {
+                        "name": "Net Promoter Score (NPS) or Customer Effort Score (CES)",
+                        "target": "CES \u2264 2 on a 7-point scale for key tasks",
+                        "why": "Measures perceived ease; correlates with retention and churn more strongly than satisfaction alone."
+                    },
+                    {
+                        "name": "Adoption Rate of New Feature",
+                        "target": "\u2265 40% of target users within 30 days of release",
+                        "why": "Reveals whether the IA, onboarding, and discoverability of the feature actually worked."
+                    },
+                    {
+                        "name": "Accessibility Audit Pass Rate",
+                        "target": "100% of AA, 0 critical issues on axe-core \/ Lighthouse",
+                        "why": "Ensures the product is usable by people with disabilities \u2014 and surfaces many issues that hurt all users."
+                    }
+                ],
+                "examples": [
+                    {
+                        "product": "Stripe",
+                        "feature": "Checkout form",
+                        "takeaway": "Inline validation, clear error text, and a single-screen layout turn a notoriously painful flow into a benchmark \u2014 proving that reducing fields and explaining constraints outperforms clever interaction tricks."
+                    },
+                    {
+                        "product": "Linear",
+                        "feature": "Cmd-K command palette and keyboard-first navigation",
+                        "takeaway": "Treating power users as first-class citizens through keyboard shortcuts and a global command palette raises perceived speed and signals craftsmanship to the whole audience."
+                    },
+                    {
+                        "product": "Notion",
+                        "feature": "Empty states and onboarding",
+                        "takeaway": "Every blank canvas shows a single next action plus a template, so a new user reaches their first success in under a minute \u2014 onboarding is the IA of the empty state."
+                    },
+                    {
+                        "product": "GitHub",
+                        "feature": "Pull request review with inline comments and 'Suggested changes'",
+                        "takeaway": "Putting collaboration primitives in context (right next to the line being discussed) collapses what used to be email-style review into a single, traceable flow."
+                    },
+                    {
+                        "product": "Apple iOS",
+                        "feature": "Back-swipe gesture and persistent back chevron",
+                        "takeaway": "Sustained commitment to a single platform convention across thousands of apps makes the OS feel predictable \u2014 a reminder that consistency is itself a feature."
+                    }
+                ],
+                "references": [
+                    {
+                        "title": "10 Usability Heuristics for User Interface Design",
+                        "source": "Nielsen Norman Group \u2014 nngroup.com\/articles\/ten-usability-heuristics"
+                    },
+                    {
+                        "title": "Don't Make Me Think, Revisited (3rd ed.)",
+                        "source": "Steve Krug \u2014 2014"
+                    },
+                    {
+                        "title": "The Design of Everyday Things",
+                        "source": "Don Norman \u2014 Revised & Expanded Edition, 2013"
+                    },
+                    {
+                        "title": "Information Architecture: For the Web and Beyond (4th ed.)",
+                        "source": "Louis Rosenfeld, Peter Morville, Jorge Arango \u2014 2015"
+                    },
+                    {
+                        "title": "About Face: The Essentials of Interaction Design (4th ed.)",
+                        "source": "Alan Cooper, Robert Reimann, David Cronin, Christopher Noessel \u2014 2014"
+                    },
+                    {
+                        "title": "Web Content Accessibility Guidelines (WCAG) 2.2",
+                        "source": "W3C \u2014 w3.org\/TR\/WCAG22"
+                    },
+                    {
+                        "title": "Why You Only Need to Test with 5 Users (and sometimes fewer)",
+                        "source": "Nielsen Norman Group \u2014 nngroup.com\/articles\/why-you-only-need-to-test-with-5-users"
+                    },
+                    {
+                        "title": "Measuring Usability with the System Usability Scale (SUS)",
+                        "source": "John Brooke \u2014 1996, Digital Human-Interface Design Guide"
+                    },
+                    {
+                        "title": "Laws of UX",
+                        "source": "Jon Yablonski \u2014 lawsofux.com"
+                    },
+                    {
+                        "title": "Refactoring UI",
+                        "source": "Adam Wathan & Steve Schoger \u2014 2018 (practical UI craft guide)"
+                    }
+                ],
+                "action_items": [
+                    "Schedule 5 moderated usability tests this sprint on your top 3 user flows; recruit real users, not teammates, and define a pass\/fail threshold for each task before the session.",
+                    "Audit your IA: card-sort the top 50 destinations with 8 users and validate that \u226575% land in the same category you'd expect \u2014 restructure navigation only where the data clearly justifies it.",
+                    "Stand up a design-token system (Figma Variables or equivalent) covering color, spacing, typography, radius, shadow, and motion; replace hard-coded values in the codebase within one quarter.",
+                    "Add axe-core (or Lighthouse Accessibility) to CI and fail any PR that introduces a new AA violation; track critical issues to zero.",
+                    "Instrument the four core metrics (task success rate, time on task, error rate, SUS) for your top flow and publish a dashboard the whole team can see weekly."
+                ],
+                "scope": "ux_best_practices",
+                "category": "UX"
+            },
+            "created_at": "2026-07-22 09:05:48"
+        }
+    ]
+}
