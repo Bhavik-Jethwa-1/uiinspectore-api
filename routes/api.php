@@ -341,6 +341,42 @@ Route::prefix('ai/studio')->middleware('api.auth')->group(function () {
     Route::put ('/settings',  [\App\Http\Controllers\Api\AI\AIStudioController::class, 'saveUserSettings']);
 });
 
+
+// ─── UI Inspector (public auth — no middleware) ──────────────────────
+Route::prefix('inspector')->group(function () {
+    Route::post('/register',    [\App\Http\Controllers\Api\Inspector\InspectorAuthController::class, 'register']);
+    Route::post('/login',       [\App\Http\Controllers\Api\Inspector\InspectorAuthController::class, 'login']);
+});
+
+// ─── UI Inspector (protected) ─────────────────────────────────────────────
+Route::prefix('inspector')->middleware('inspector.auth')->group(function () {
+    Route::get ('/me',          [\App\Http\Controllers\Api\Inspector\InspectorAuthController::class, 'me']);
+    Route::put ('/profile',     [\App\Http\Controllers\Api\Inspector\InspectorAuthController::class, 'updateProfile']);
+    Route::post('/logout',      [\App\Http\Controllers\Api\Inspector\InspectorAuthController::class, 'logout']);
+    Route::delete('/account',   [\App\Http\Controllers\Api\Inspector\InspectorAuthController::class, 'deleteAccount']);
+
+    // Projects
+    Route::get   ('/projects',               [\App\Http\Controllers\Api\Inspector\InspectorProjectController::class, 'index']);
+    Route::post  ('/projects',                [\App\Http\Controllers\Api\Inspector\InspectorProjectController::class, 'store']);
+    Route::get   ('/projects/{id}',           [\App\Http\Controllers\Api\Inspector\InspectorProjectController::class, 'show']);
+    Route::put   ('/projects/{id}',           [\App\Http\Controllers\Api\Inspector\InspectorProjectController::class, 'update']);
+    Route::delete('/projects/{id}',           [\App\Http\Controllers\Api\Inspector\InspectorProjectController::class, 'destroy']);
+
+    // Screenshots
+    Route::post  ('/projects/{projectId}/screenshots',  [\App\Http\Controllers\Api\Inspector\InspectorScreenshotController::class, 'store']);
+    Route::delete('/screenshots/{id}',                   [\App\Http\Controllers\Api\Inspector\InspectorScreenshotController::class, 'destroy']);
+
+    // Reviews
+    Route::post  ('/projects/{projectId}/review',   [\App\Http\Controllers\Api\Inspector\InspectorReviewController::class, 'generate']);
+    Route::get   ('/projects/{projectId}/reviews',  [\App\Http\Controllers\Api\Inspector\InspectorReviewController::class, 'forProject']);
+    Route::get   ('/reviews/{id}',                  [\App\Http\Controllers\Api\Inspector\InspectorReviewController::class, 'show']);
+
+    // Redesigns
+    Route::post  ('/projects/{projectId}/redesign',     [\App\Http\Controllers\Api\Inspector\InspectorRedesignController::class, 'generate']);
+    Route::post  ('/redesigns/{id}/regenerate',         [\App\Http\Controllers\Api\Inspector\InspectorRedesignController::class, 'regenerate']);
+    Route::get   ('/redesigns/{id}',                    [\App\Http\Controllers\Api\Inspector\InspectorRedesignController::class, 'show']);
+});
+
 // ─── Stripe Webhooks (no auth — Stripe signs with webhook secret) ───────────
 Route::post('/billing/credits/webhook', [CreditController::class, 'webhook']);
 Route::post('/billing/stripe/webhook', [\App\Http\Controllers\Api\Billing\StripeWebhookController::class, 'handle']);

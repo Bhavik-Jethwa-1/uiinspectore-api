@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'api.auth' => \App\Http\Middleware\ApiAuthMiddleware::class,
+            'inspector.auth' => \App\Http\Middleware\InspectorAuthMiddleware::class,
             'admin'    => \App\Http\Middleware\AdminMiddleware::class,
             'perf'     => \App\Http\Middleware\PerformanceMonitor::class,
             'subscription' => \App\Http\Middleware\SubscriptionGate::class,

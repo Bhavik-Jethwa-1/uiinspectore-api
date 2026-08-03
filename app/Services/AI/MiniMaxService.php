@@ -476,13 +476,25 @@ class MiniMaxService
             return $url;
         }
 
-        // Resolve relative URLs
-        if (str_starts_with($url, '/')) {
-            $url = rtrim(config('app.url'), '/') . $url;
+        // Handle absolute filesystem paths — read directly
+        if (str_starts_with($url, '/') && file_exists($url)) {
+            $mime = mime_content_type($url);
+            return 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($url));
         }
 
-        // Only handle http(s) URLs for conversion
+        // Resolve relative URLs (storage/... paths)
         if (!str_starts_with($url, 'http')) {
+            $fullPath = storage_path('app/public/' . $url);
+            if (file_exists($fullPath)) {
+                $mime = mime_content_type($fullPath);
+                return 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($fullPath));
+            }
+            // Try as absolute path from storage/
+            if (file_exists(storage_path($url))) {
+                $fullPath = storage_path($url);
+                $mime = mime_content_type($fullPath);
+                return 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($fullPath));
+            }
             return $url;
         }
 
