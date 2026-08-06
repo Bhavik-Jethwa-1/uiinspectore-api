@@ -81,7 +81,7 @@ class VisionAnalysisService
         $payload = [
             'model' => self::VISION_MODEL,
             'messages' => $messages,
-            'max_tokens' => 4000,
+            'max_tokens' => 3000,
             'temperature' => 0.2,
         ];
 
@@ -192,8 +192,8 @@ class VisionAnalysisService
             return 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($filePath));
         }
 
-        // 512px max — balances quality vs upload speed for OpenRouter API
-        $maxDim = 512;
+        // 1024px — better quality for accurate UI analysis
+        $maxDim = 1024;
         $img    = null;
         $ext    = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
 
@@ -380,54 +380,151 @@ PROMPT;
     private function parseAnalysis(string $content): array
     {
         $json = $this->extractJson($content);
+
+        // If extraction failed, try to salvage partial JSON
         if (!$json) {
-            return [
-                'scores' => [
-                    'overall' => 50,
-                    'visual_hierarchy' => 50,
-                    'clarity' => 50,
-                    'accessibility' => 50,
-                    'consistency' => 50,
-                ],
-                'summary' => [
-                    'overall' => substr($content, 0, 300),
-                    'ui_issues' => [],
-                    'ux_issues' => [],
-                    'accessibility_issues' => [],
-                    'improvements' => [],
-                ],
-                'annotations' => [],
-                'suggestions' => [],
-            ];
+            $partial = $this->salvagePartialJson($content);
+            if ($partial) {
+                $json = $partial;
+            }
         }
-        return $json;
+
+        if (!$json) {
+            // Last resort: use text-based extraction
+            return $this->parseAnalysisFromText($content);
+        }
+
+        // Ensure required top-level keys exist
+        return array_merge([
+            'scores' => [
+                'overall' => 50,
+                'visual_hierarchy' => 50,
+                'clarity' => 50,
+                'accessibility' => 50,
+                'consistency' => 50,
+            ],
+            'summary' => [
+                'overall' => 'Analysis completed.',
+                'ui_issues' => [],
+                'ux_issues' => [],
+                'accessibility_issues' => [],
+                'improvements' => [],
+            ],
+            'annotations' => [],
+            'suggestions' => [],
+        ], $json);
     }
 
+    /**
+     * Extract JSON allowing for trailing garbage after valid JSON.
+     */
     private function extractJson(string $content): ?array
     {
+        // Direct parse attempt
         $json = json_decode($content, true);
         if ($json && is_array($json)) {
             return $json;
         }
 
-        // Try markdown code blocks
-        if (preg_match('/```(?:json)?\s*(\{.*?\})\s*```/s', $content, $m)) {
-            $json = json_decode($m[1], true);
-            if (is_array($json)) {
-                return $json;
+        // Try markdown code blocks (with potential partial content after)
+        if (preg_match('/```(?:json)?\s*(\{[\s\S]*)/s', $content, $m)) {
+            $candidate = $m[1];
+            // Try to find the matching closing brace
+            $depth = 0;
+            for ($i = 0; $i < strlen($candidate); $i++) {
+                if ($candidate[$i] === '{') $depth++;
+                elseif ($candidate[$i] === '}') { $depth--; if ($depth === 0) { $candidate = substr($candidate, 0, $i + 1); break; } }
             }
+            $json = json_decode($candidate, true);
+            if (is_array($json)) return $json;
         }
 
         // Try outermost braces
         $start = strpos($content, '{');
+        if ($start !== false) {
+            // Try progressively shorter strings from end
+            $end = strrpos($content, '}');
+            if ($end !== false && $end > $start) {
+                $candidate = substr($content, $start, $end - $start + 1);
+                $json = json_decode($candidate, true);
+                if (is_array($json)) return $json;
+
+                // Try finding where valid JSON ends
+                for ($i = $end; $i >= $start; $i--) {
+                    $candidate = substr($content, $start, $i - $start + 1);
+                    $json = json_decode($candidate, true);
+                    if (is_array($json) && count($json) > 0) return $json;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Try to salvage partial JSON by finding the last complete value before truncation.
+     */
+    private function salvagePartialJson(string $content): ?array
+    {
+        // Find opening brace
+        $start = strpos($content, '{');
+        if ($start === false) return null;
+
+        // Try progressively shorter substrings to find valid JSON
         $end = strrpos($content, '}');
-        if ($start !== false && $end !== false && $end > $start) {
-            $json = json_decode(substr($content, $start, $end - $start + 1), true);
-            if (is_array($json)) {
+        if ($end === false || $end <= $start) return null;
+
+        // Start from end and work backwards to find last complete parseable object
+        for ($i = $end; $i >= $start; $i--) {
+            $candidate = substr($content, $start, $i - $start + 1);
+            $json = json_decode($candidate, true);
+            if (is_array($json) && count($json) > 1) {
                 return $json;
             }
         }
 
         return null;
+    }
+
+    /**
+     * Fallback: extract meaningful data from raw text when JSON parsing fails.
+     */
+    private function parseAnalysisFromText(string $content): array
+    {
+        $scores = [
+            'overall' => 50,
+            'visual_hierarchy' => 50,
+            'clarity' => 50,
+            'accessibility' => 50,
+            'consistency' => 50,
+        ];
+
+        // Try to find score patterns in text (e.g., "overall: 85" or "overall = 85")
+        if (preg_match_all('/"(overall|visual_hierarchy|clarity|accessibility|consistency)"\s*:\s*(\d+)/i', $content, $m, PREG_SET_ORDER)) {
+            foreach ($m as [$key, $score]) {
+                $key = strtolower($key);
+                if (isset($scores[$key])) {
+                    $scores[$key] = min(100, max(0, (int) $score));
+                }
+            }
+        }
+
+        // Extract summary as the longest sentence-like text
+        $textContent = preg_replace('/[\[\]{}]/', ' ', $content);
+        $textContent = preg_replace('/\s+/', ' ', $textContent);
+        $summary = trim(substr($textContent, 0, 300)) ?: 'Analysis completed.';
+
+        return [
+            'scores' => $scores,
+            'summary' => [
+                'overall' => $summary,
+                'ui_issues' => [],
+                'ux_issues' => [],
+                'accessibility_issues' => [],
+                'improvements' => [],
+            ],
+            'annotations' => [],
+            'suggestions' => [],
+        ];
     }
 }
