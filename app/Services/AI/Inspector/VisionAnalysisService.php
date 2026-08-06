@@ -137,7 +137,7 @@ class VisionAnalysisService
                 ];
             }
 
-            $content = $result['choices'][0]['message']['content'] ?? '';
+            $content = $result['reply'] ?? $result['choices'][0]['message']['content'] ?? '';
 
             if ($mode === 'detect') {
                 $json = $this->extractJson($content);
