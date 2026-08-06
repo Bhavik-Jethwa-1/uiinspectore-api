@@ -2,24 +2,22 @@
 
 namespace App\Services\AI\Inspector;
 
-use App\Services\AI\MiniMaxService;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class VisionAnalysisService
 {
-    private MiniMaxService $miniMax;
-
-    public function __construct(MiniMaxService $miniMax)
-    {
-        $this->miniMax = $miniMax;
-    }
-
     private const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
     // Free vision model on OpenRouter
     private const VISION_MODEL = 'nvidia/nemotron-nano-12b-v2-vl:free';
+
+    // Retryable HTTP status codes
+    private const RETRYABLE_CODES = [429, 500, 502, 503, 504];
+
+    private const MAX_RETRIES = 3;
+    private const RETRY_DELAY_MS = 2000;
 
     private static function openRouterKey(): string
     {
@@ -50,118 +48,132 @@ class VisionAnalysisService
         $personaContext = $this->getPersonaContext($persona);
         $prompt = $this->buildAnalysisPrompt($pageGoal, $personaContext);
 
-        try {
-            // Convert image to base64
-            $imageData = base64_encode(file_get_contents($fullPath));
-            $mimeType = mime_content_type($fullPath);
-            $dataUri = "data:{$mimeType};base64,{$imageData}";
+        // Convert image to base64 data URI
+        $dataUri = $this->compressImageForVision($fullPath);
 
-            // Call OpenRouter vision API directly
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . self::openRouterKey(),
-                'Content-Type' => 'application/json',
-            ])->timeout(120)->post(self::OPENROUTER_API_URL, [
-                'model' => self::VISION_MODEL,
-                'messages' => [
-                    [
-                        'role' => 'user',
-                        'content' => [
-                            ['type' => 'text', 'text' => $prompt],
-                            ['type' => 'image_url', 'image_url' => ['url' => $dataUri]],
-                        ],
-                    ],
+        $messages = [
+            [
+                'role' => 'user',
+                'content' => [
+                    ['type' => 'text', 'text' => $prompt],
+                    ['type' => 'image_url', 'image_url' => ['url' => $dataUri]],
                 ],
-                'max_tokens' => 4000,
-                'temperature' => 0.2,
-            ]);
+            ],
+        ];
 
-            if (!$response->successful()) {
-                $error = $response->json();
-                $httpCode = $response->status();
-                $errorMsg = $error['error']['message'] ?? 'Unknown error';
-                Log::warning('OpenRouter vision API error, falling back to MiniMax VL', [
-                    'http_code' => $httpCode,
-                    'error' => $errorMsg,
-                ]);
-                // Fall through to MiniMax VL fallback
-                return $this->analyzeWithMiniMax($imagePath, $prompt);
-            }
-
-            $data = $response->json();
-            $content = $data['choices'][0]['message']['content'] ?? '';
-            $analysis = $this->parseAnalysis($content);
-
-            return [
-                'success' => true,
-                'analysis' => $analysis,
-                'raw' => $content,
-            ];
-        } catch (\Throwable $e) {
-            Log::warning('Vision analysis exception, falling back to MiniMax VL', ['message' => $e->getMessage()]);
-            return $this->analyzeWithMiniMax($imagePath, $prompt);
-        }
+        return $this->callVisionApiWithRetry($messages);
     }
 
     /**
-     * Fallback: analyze using MiniMax VL via OpenClaw gateway.
+     * Call OpenRouter Vision API with retry logic for transient errors.
      */
-    private function analyzeWithMiniMax(string $imagePath, string $prompt, string $mode = 'analyze'): array
+    private function callVisionApiWithRetry(array $messages, int $attempt = 1): array
     {
+        $key = self::openRouterKey();
+        if (empty($key)) {
+            return [
+                'success' => false,
+                'error' => 'OPENROUTER_API_KEY is not set in .env',
+                'provider' => 'openrouter',
+            ];
+        }
+
+        $payload = [
+            'model' => self::VISION_MODEL,
+            'messages' => $messages,
+            'max_tokens' => 4000,
+            'temperature' => 0.2,
+        ];
+
+        Log::info('VisionAnalysisService: calling OpenRouter', [
+            'model' => self::VISION_MODEL,
+            'attempt' => $attempt,
+            'key_prefix' => substr($key, 0, 8),
+        ]);
+
         try {
-            $fullPath = storage_path('app/public/' . ltrim($imagePath, '/'));
-            if (!file_exists($fullPath)) {
-                return ['success' => false, 'error' => 'Screenshot file not found: ' . $fullPath];
-            }
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $key,
+                'Content-Type' => 'application/json',
+                'HTTP-Referer' => 'https://uiinspectore.app',
+                'X-Title' => 'UI Inspector',
+            ])->timeout(120)->post(self::OPENROUTER_API_URL, $payload);
 
-            // Compress and encode image directly
-            $dataUri = $this->compressImageForVision($fullPath);
+            $httpCode = $response->status();
+            $body = $response->json();
 
-            $messages = [[
-                'role'    => 'user',
-                'content' => [
-                    ['type' => 'text',      'text' => $prompt ?: 'Describe this image.'],
-                    ['type' => 'image_url', 'image_url' => ['url' => $dataUri]],
-                ],
-            ]];
-
-            $result = $this->miniMax->chat($messages, [
-                'model' => 'minimax-vl-01',
-                'max_tokens' => $mode === 'detect' ? 3000 : 4000,
-                'temperature' => 0.2,
+            Log::info('VisionAnalysisService: OpenRouter response', [
+                'http_code' => $httpCode,
+                'attempt' => $attempt,
+                'has_error' => isset($body['error']),
+                'error_type' => $body['error']['type'] ?? null,
+                'error_msg' => $body['error']['message'] ?? null,
             ]);
 
-            if (!($result['success'] ?? false)) {
+            // Retry on transient errors
+            if (in_array($httpCode, self::RETRYABLE_CODES) && $attempt < self::MAX_RETRIES) {
+                Log::warning("VisionAnalysisService: retryable HTTP {$httpCode}, attempt {$attempt}/" . self::MAX_RETRIES);
+                usleep(self::RETRY_DELAY_MS * 1000);
+                return $this->callVisionApiWithRetry($messages, $attempt + 1);
+            }
+
+            if ($httpCode === 401 || $httpCode === 403) {
+                $msg = $body['error']['message'] ?? "Authentication failed (HTTP {$httpCode})";
                 return [
                     'success' => false,
-                    'error' => $result['error'] ?? 'MiniMax VL analysis failed',
+                    'error' => "OpenRouter authentication failed: {$msg}. Please check your API key at https://openrouter.ai/keys",
+                    'provider' => 'openrouter',
+                    'http_code' => $httpCode,
                 ];
             }
 
-            $content = $result['reply'] ?? $result['choices'][0]['message']['content'] ?? '';
-
-            if ($mode === 'detect') {
-                $json = $this->extractJson($content);
+            if ($httpCode === 429) {
+                $msg = $body['error']['message'] ?? 'Rate limit exceeded';
                 return [
-                    'success' => true,
-                    'components' => $json,
-                    'raw' => $content,
-                    'provider' => 'minimax',
+                    'success' => false,
+                    'error' => "OpenRouter rate limit reached: {$msg}. Please try again in a few minutes.",
+                    'provider' => 'openrouter',
+                    'http_code' => 429,
+                    'can_retry' => true,
                 ];
             }
 
+            if ($httpCode !== 200) {
+                $msg = $body['error']['message'] ?? "HTTP error {$httpCode}";
+                return [
+                    'success' => false,
+                    'error' => "OpenRouter error: {$msg}",
+                    'provider' => 'openrouter',
+                    'http_code' => $httpCode,
+                ];
+            }
+
+            // Success
+            $content = $body['choices'][0]['message']['content'] ?? '';
             $analysis = $this->parseAnalysis($content);
 
             return [
                 'success' => true,
                 'analysis' => $analysis,
                 'raw' => $content,
-                'provider' => 'minimax',
+                'provider' => 'openrouter',
+                'model' => $body['model'] ?? self::VISION_MODEL,
             ];
         } catch (\Throwable $e) {
-            Log::error('MiniMax VL fallback also failed', ['message' => $e->getMessage()]);
+            Log::error('VisionAnalysisService: exception', [
+                'message' => $e->getMessage(),
+                'attempt' => $attempt,
+            ]);
+
+            if ($attempt < self::MAX_RETRIES) {
+                usleep(self::RETRY_DELAY_MS * 1000);
+                return $this->callVisionApiWithRetry($messages, $attempt + 1);
+            }
+
             return [
                 'success' => false,
-                'error' => 'Vision analysis failed: ' . $e->getMessage(),
+                'error' => 'Vision analysis request failed: ' . $e->getMessage(),
+                'provider' => 'openrouter',
             ];
         }
     }
@@ -173,13 +185,15 @@ class VisionAnalysisService
     private function compressImageForVision(string $filePath): string
     {
         $fileSize = filesize($filePath);
+
         // Small files — skip compression, encode directly
         if ($fileSize < 20 * 1024) {
             $mime = mime_content_type($filePath);
             return 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($filePath));
         }
 
-        $maxDim = 1024;
+        // 512px max — balances quality vs upload speed for OpenRouter API
+        $maxDim = 512;
         $img    = null;
         $ext    = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
 
@@ -266,8 +280,20 @@ Analyze this UI screenshot and detect all major components. Return a JSON object
 Be specific and detailed. Return ONLY the JSON object, no markdown.
 PROMPT;
 
-        // detectComponents now uses MiniMax VL via the fallback method
-        return $this->analyzeWithMiniMax($imagePath, $prompt, 'detect');
+        $fullPath = $fullPath;
+        $dataUri = $this->compressImageForVision($fullPath);
+
+        $messages = [
+            [
+                'role' => 'user',
+                'content' => [
+                    ['type' => 'text', 'text' => $prompt],
+                    ['type' => 'image_url', 'image_url' => ['url' => $dataUri]],
+                ],
+            ],
+        ];
+
+        return $this->callVisionApiWithRetry($messages);
     }
 
     // ─── Private Helpers ─────────────────────────────────────────────────────
@@ -356,8 +382,20 @@ PROMPT;
         $json = $this->extractJson($content);
         if (!$json) {
             return [
-                'scores' => ['overall' => 50, 'visual_hierarchy' => 50, 'clarity' => 50, 'accessibility' => 50, 'consistency' => 50],
-                'summary' => ['overall' => substr($content, 0, 300), 'ui_issues' => [], 'ux_issues' => [], 'accessibility_issues' => [], 'improvements' => []],
+                'scores' => [
+                    'overall' => 50,
+                    'visual_hierarchy' => 50,
+                    'clarity' => 50,
+                    'accessibility' => 50,
+                    'consistency' => 50,
+                ],
+                'summary' => [
+                    'overall' => substr($content, 0, 300),
+                    'ui_issues' => [],
+                    'ux_issues' => [],
+                    'accessibility_issues' => [],
+                    'improvements' => [],
+                ],
                 'annotations' => [],
                 'suggestions' => [],
             ];
