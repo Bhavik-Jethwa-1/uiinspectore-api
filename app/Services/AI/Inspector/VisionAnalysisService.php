@@ -17,10 +17,18 @@ class VisionAnalysisService
     }
 
     private const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
-    
+
     // Free vision model on OpenRouter
     private const VISION_MODEL = 'nvidia/nemotron-nano-12b-v2-vl:free';
-    private const OPENROUTER_KEY_OK = 'sk-or-v2-'; // keys that look valid (not placeholder)
+
+    private static function openRouterKey(): string
+    {
+        static $key = null;
+        if ($key === null) {
+            $key = env('OPENROUTER_API_KEY', '');
+        }
+        return $key;
+    }
 
     /**
      * Analyze a screenshot and return comprehensive UI/UX analysis.
@@ -97,11 +105,30 @@ class VisionAnalysisService
     /**
      * Fallback: analyze using MiniMax VL via OpenClaw gateway.
      */
-    private function analyzeWithMiniMax(string $imagePath, string $prompt): array
+    private function analyzeWithMiniMax(string $imagePath, string $prompt, string $mode = 'analyze'): array
     {
         try {
-            $imageUrl = 'storage/' . ltrim($imagePath, '/');
-            $result = $this->miniMax->vision($imageUrl, $prompt);
+            $fullPath = storage_path('app/public/' . ltrim($imagePath, '/'));
+            if (!file_exists($fullPath)) {
+                return ['success' => false, 'error' => 'Screenshot file not found: ' . $fullPath];
+            }
+
+            // Compress and encode image directly
+            $dataUri = $this->compressImageForVision($fullPath);
+
+            $messages = [[
+                'role'    => 'user',
+                'content' => [
+                    ['type' => 'text',      'text' => $prompt ?: 'Describe this image.'],
+                    ['type' => 'image_url', 'image_url' => ['url' => $dataUri]],
+                ],
+            ]];
+
+            $result = $this->miniMax->chat($messages, [
+                'model' => 'minimax-vl-01',
+                'max_tokens' => $mode === 'detect' ? 3000 : 4000,
+                'temperature' => 0.2,
+            ]);
 
             if (!($result['success'] ?? false)) {
                 return [
@@ -111,6 +138,17 @@ class VisionAnalysisService
             }
 
             $content = $result['choices'][0]['message']['content'] ?? '';
+
+            if ($mode === 'detect') {
+                $json = $this->extractJson($content);
+                return [
+                    'success' => true,
+                    'components' => $json,
+                    'raw' => $content,
+                    'provider' => 'minimax',
+                ];
+            }
+
             $analysis = $this->parseAnalysis($content);
 
             return [
@@ -126,6 +164,65 @@ class VisionAnalysisService
                 'error' => 'Vision analysis failed: ' . $e->getMessage(),
             ];
         }
+    }
+
+    /**
+     * Compress an image file for vision API transmission.
+     * Resizes to max 1024px width, converts to JPEG at 80% quality.
+     */
+    private function compressImageForVision(string $filePath): string
+    {
+        $fileSize = filesize($filePath);
+        // Small files — skip compression, encode directly
+        if ($fileSize < 20 * 1024) {
+            $mime = mime_content_type($filePath);
+            return 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($filePath));
+        }
+
+        $maxDim = 1024;
+        $img    = null;
+        $ext    = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+
+        if ($ext === 'png') {
+            $img = @imagecreatefrompng($filePath);
+        } elseif (in_array($ext, ['jpg', 'jpeg'])) {
+            $img = @imagecreatefromjpeg($filePath);
+        } elseif ($ext === 'webp') {
+            $img = @imagecreatefromwebp($filePath);
+        } elseif ($ext === 'gif') {
+            $img = @imagecreatefromgif($filePath);
+        }
+
+        if (!$img) {
+            // Fallback: return as-is
+            $mime = mime_content_type($filePath);
+            return 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($filePath));
+        }
+
+        $origW = imagesx($img);
+        $origH = imagesy($img);
+
+        // Only resize if larger than maxDim
+        if ($origW > $maxDim || $origH > $maxDim) {
+            $ratio = min($maxDim / $origW, $maxDim / $origH);
+            $newW  = (int) round($origW * $ratio);
+            $newH  = (int) round($origH * $ratio);
+            $resized = imagecreatetruecolor($newW, $newH);
+            imagecopy($resized, $img, 0, 0, 0, 0, $newW, $newH);
+            if ($ext === 'png') {
+                imagealphablending($resized, false);
+                imagesavealpha($resized, true);
+            }
+            imagedestroy($img);
+            $img = $resized;
+        }
+
+        ob_start();
+        imagejpeg($img, null, 80);
+        $jpeg = ob_get_clean();
+        imagedestroy($img);
+
+        return 'data:image/jpeg;base64,' . base64_encode($jpeg);
     }
 
     /**
@@ -169,52 +266,8 @@ Analyze this UI screenshot and detect all major components. Return a JSON object
 Be specific and detailed. Return ONLY the JSON object, no markdown.
 PROMPT;
 
-        try {
-            $imageData = base64_encode(file_get_contents($fullPath));
-            $mimeType = mime_content_type($fullPath);
-            $dataUri = "data:{$mimeType};base64,{$imageData}";
-
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . self::openRouterKey(),
-                'Content-Type' => 'application/json',
-            ])->timeout(120)->post(self::OPENROUTER_API_URL, [
-                'model' => self::VISION_MODEL,
-                'messages' => [
-                    [
-                        'role' => 'user',
-                        'content' => [
-                            ['type' => 'text', 'text' => $prompt],
-                            ['type' => 'image_url', 'image_url' => ['url' => $dataUri]],
-                        ],
-                    ],
-                ],
-                'max_tokens' => 3000,
-                'temperature' => 0.2,
-            ]);
-
-            if (!$response->successful()) {
-                $error = $response->json();
-                return [
-                    'success' => false,
-                    'error' => 'Component detection API error: ' . ($error['error']['message'] ?? 'Unknown'),
-                ];
-            }
-
-            $data = $response->json();
-            $content = $data['choices'][0]['message']['content'] ?? '';
-            $json = $this->extractJson($content);
-
-            return [
-                'success' => true,
-                'components' => $json,
-                'raw' => $content,
-            ];
-        } catch (\Throwable $e) {
-            return [
-                'success' => false,
-                'error' => 'Component detection failed: ' . $e->getMessage(),
-            ];
-        }
+        // detectComponents now uses MiniMax VL via the fallback method
+        return $this->analyzeWithMiniMax($imagePath, $prompt, 'detect');
     }
 
     // ─── Private Helpers ─────────────────────────────────────────────────────
@@ -265,8 +318,8 @@ Analyze this UI screenshot thoroughly and return a comprehensive JSON analysis:
     {
       "category": "typography|color|spacing|content|accessibility|navigation|layout|iconography|contrast|responsive",
       "title": "Actionable suggestion title",
-      "description": "Problem statement — what's wrong right now",
-      "suggested_fix": "Implementation-ready fix — exactly what to do",
+      "description": "Problem statement - what's wrong right now",
+      "suggested_fix": "Implementation-ready fix - exactly what to do",
       "expected_improvement": "Specific UX improvement",
       "difficulty": "easy|medium|hard",
       "priority": "critical|high|medium|low"
@@ -289,12 +342,12 @@ PROMPT;
     private function getPersonaContext(string $persona): string
     {
         return match ($persona) {
-            'first_time' => 'First-time user — needs onboarding, clear CTAs, obvious next steps, minimal cognitive load',
-            'non_technical' => 'Non-technical user — avoid jargon, use plain language, intuitive navigation',
-            'junior_dev' => 'Junior developer — clean code hints, standard patterns, good documentation labels',
-            'devops' => 'DevOps engineer — technical clarity, efficiency, automation-friendly UI',
-            'designer' => 'Product designer — design system consistency, visual hierarchy, pixel-perfect details',
-            default => 'General user — balanced UX for most audiences',
+            'first_time' => 'First-time user - needs onboarding, clear CTAs, obvious next steps, minimal cognitive load',
+            'non_technical' => 'Non-technical user - avoid jargon, use plain language, intuitive navigation',
+            'junior_dev' => 'Junior developer - clean code hints, standard patterns, good documentation labels',
+            'devops' => 'DevOps engineer - technical clarity, efficiency, automation-friendly UI',
+            'designer' => 'Product designer - design system consistency, visual hierarchy, pixel-perfect details',
+            default => 'General user - balanced UX for most audiences',
         };
     }
 
