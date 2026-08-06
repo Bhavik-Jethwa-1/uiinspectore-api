@@ -2,27 +2,25 @@
 
 namespace App\Services\AI\Inspector;
 
+use App\Services\AI\MiniMaxService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 
 class VisionAnalysisService
 {
-    // OpenRouter API key (from OpenClaw config)
-    private const OPENROUTER_API_KEY = '';
+    private MiniMaxService $miniMax;
 
-    private static function openRouterKey(): string
+    public function __construct(MiniMaxService $miniMax)
     {
-        static $key = null;
-        if ($key === null) {
-            $key = env('OPENROUTER_API_KEY', '');
-        }
-        return $key;
+        $this->miniMax = $miniMax;
     }
+
     private const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
     
     // Free vision model on OpenRouter
     private const VISION_MODEL = 'nvidia/nemotron-nano-12b-v2-vl:free';
+    private const OPENROUTER_KEY_OK = 'sk-or-v2-'; // keys that look valid (not placeholder)
 
     /**
      * Analyze a screenshot and return comprehensive UI/UX analysis.
@@ -71,11 +69,14 @@ class VisionAnalysisService
 
             if (!$response->successful()) {
                 $error = $response->json();
-                Log::error('OpenRouter vision API error', ['response' => $error]);
-                return [
-                    'success' => false,
-                    'error' => 'Vision API error: ' . ($error['error']['message'] ?? 'Unknown error'),
-                ];
+                $httpCode = $response->status();
+                $errorMsg = $error['error']['message'] ?? 'Unknown error';
+                Log::warning('OpenRouter vision API error, falling back to MiniMax VL', [
+                    'http_code' => $httpCode,
+                    'error' => $errorMsg,
+                ]);
+                // Fall through to MiniMax VL fallback
+                return $this->analyzeWithMiniMax($imagePath, $prompt);
             }
 
             $data = $response->json();
@@ -88,7 +89,38 @@ class VisionAnalysisService
                 'raw' => $content,
             ];
         } catch (\Throwable $e) {
-            Log::error('Vision analysis exception', ['message' => $e->getMessage()]);
+            Log::warning('Vision analysis exception, falling back to MiniMax VL', ['message' => $e->getMessage()]);
+            return $this->analyzeWithMiniMax($imagePath, $prompt);
+        }
+    }
+
+    /**
+     * Fallback: analyze using MiniMax VL via OpenClaw gateway.
+     */
+    private function analyzeWithMiniMax(string $imagePath, string $prompt): array
+    {
+        try {
+            $imageUrl = 'storage/' . ltrim($imagePath, '/');
+            $result = $this->miniMax->vision($imageUrl, $prompt);
+
+            if (!($result['success'] ?? false)) {
+                return [
+                    'success' => false,
+                    'error' => $result['error'] ?? 'MiniMax VL analysis failed',
+                ];
+            }
+
+            $content = $result['choices'][0]['message']['content'] ?? '';
+            $analysis = $this->parseAnalysis($content);
+
+            return [
+                'success' => true,
+                'analysis' => $analysis,
+                'raw' => $content,
+                'provider' => 'minimax',
+            ];
+        } catch (\Throwable $e) {
+            Log::error('MiniMax VL fallback also failed', ['message' => $e->getMessage()]);
             return [
                 'success' => false,
                 'error' => 'Vision analysis failed: ' . $e->getMessage(),
