@@ -2,17 +2,27 @@
 
 namespace App\Services\AI\Inspector;
 
-use App\Services\AI\MiniMaxService;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class VisionAnalysisService
 {
-    private MiniMaxService $miniMax;
+    // OpenRouter API key (from OpenClaw config)
+    private const OPENROUTER_API_KEY = '';
 
-    public function __construct(MiniMaxService $miniMax)
+    private static function openRouterKey(): string
     {
-        $this->miniMax = $miniMax;
+        static $key = null;
+        if ($key === null) {
+            $key = env('OPENROUTER_API_KEY', '');
+        }
+        return $key;
     }
+    private const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+    
+    // Free vision model on OpenRouter
+    private const VISION_MODEL = 'nvidia/nemotron-nano-12b-v2-vl:free';
 
     /**
      * Analyze a screenshot and return comprehensive UI/UX analysis.
@@ -35,13 +45,41 @@ class VisionAnalysisService
         $prompt = $this->buildAnalysisPrompt($pageGoal, $personaContext);
 
         try {
-            // Use MiniMaxService vision() — uses minimax-vl-01 via /v1/chat/completions
-            $result = $this->miniMax->vision($fullPath, $prompt, [
+            // Convert image to base64
+            $imageData = base64_encode(file_get_contents($fullPath));
+            $mimeType = mime_content_type($fullPath);
+            $dataUri = "data:{$mimeType};base64,{$imageData}";
+
+            // Call OpenRouter vision API directly
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . self::openRouterKey(),
+                'Content-Type' => 'application/json',
+            ])->timeout(120)->post(self::OPENROUTER_API_URL, [
+                'model' => self::VISION_MODEL,
+                'messages' => [
+                    [
+                        'role' => 'user',
+                        'content' => [
+                            ['type' => 'text', 'text' => $prompt],
+                            ['type' => 'image_url', 'image_url' => ['url' => $dataUri]],
+                        ],
+                    ],
+                ],
                 'max_tokens' => 4000,
                 'temperature' => 0.2,
             ]);
 
-            $content = $result['reply'] ?? '';
+            if (!$response->successful()) {
+                $error = $response->json();
+                Log::error('OpenRouter vision API error', ['response' => $error]);
+                return [
+                    'success' => false,
+                    'error' => 'Vision API error: ' . ($error['error']['message'] ?? 'Unknown error'),
+                ];
+            }
+
+            $data = $response->json();
+            $content = $data['choices'][0]['message']['content'] ?? '';
             $analysis = $this->parseAnalysis($content);
 
             return [
@@ -50,6 +88,7 @@ class VisionAnalysisService
                 'raw' => $content,
             ];
         } catch (\Throwable $e) {
+            Log::error('Vision analysis exception', ['message' => $e->getMessage()]);
             return [
                 'success' => false,
                 'error' => 'Vision analysis failed: ' . $e->getMessage(),
@@ -99,12 +138,38 @@ Be specific and detailed. Return ONLY the JSON object, no markdown.
 PROMPT;
 
         try {
-            $result = $this->miniMax->vision($fullPath, $prompt, [
+            $imageData = base64_encode(file_get_contents($fullPath));
+            $mimeType = mime_content_type($fullPath);
+            $dataUri = "data:{$mimeType};base64,{$imageData}";
+
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . self::openRouterKey(),
+                'Content-Type' => 'application/json',
+            ])->timeout(120)->post(self::OPENROUTER_API_URL, [
+                'model' => self::VISION_MODEL,
+                'messages' => [
+                    [
+                        'role' => 'user',
+                        'content' => [
+                            ['type' => 'text', 'text' => $prompt],
+                            ['type' => 'image_url', 'image_url' => ['url' => $dataUri]],
+                        ],
+                    ],
+                ],
                 'max_tokens' => 3000,
                 'temperature' => 0.2,
             ]);
 
-            $content = $result['reply'] ?? '';
+            if (!$response->successful()) {
+                $error = $response->json();
+                return [
+                    'success' => false,
+                    'error' => 'Component detection API error: ' . ($error['error']['message'] ?? 'Unknown'),
+                ];
+            }
+
+            $data = $response->json();
+            $content = $data['choices'][0]['message']['content'] ?? '';
             $json = $this->extractJson($content);
 
             return [

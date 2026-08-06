@@ -300,29 +300,15 @@ class AIChatController extends Controller
 
     // ─── GET /api/ai/providers ───────────────────────────────────────────────
     /**
-     * Returns all registered providers from ProviderManager.
+     * Returns all registered providers.
+     * Note: AI Gateway uses Inspector providers directly.
      */
     public function providers(Request $request)
     {
-        $list = $this->service->manager()->listProviders();
-        $out  = [];
-        foreach ($list as $name => $info) {
-            $out[] = [
-                'slug'         => $name,
-                'name'         => $info['label'],
-                'available'    => $info['available'],
-                'isPrimary'    => $info['isPrimary'],
-                'model'        => $info['model'],
-                'capabilities' => $info['capabilities'] ?? ['chat', 'image', 'vision'],
-                'is_unified'   => $info['isPrimary'],
-            ];
-        }
-
-        Log::debug('AI_PROVIDERS_LIST', ['count' => count($out), 'primary' => $this->service->primaryProviderName()]);
-
+        // Return empty - AI Gateway is deprecated, Inspector uses its own providers
         return response()->json([
-            'providers' => $out,
-            'primary'   => $this->service->primaryProviderName(),
+            'providers' => [],
+            'primary'   => null,
         ]);
     }
 

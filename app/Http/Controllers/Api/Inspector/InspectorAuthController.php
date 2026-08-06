@@ -91,13 +91,24 @@ class InspectorAuthController extends Controller
 
         $data = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
+            'email' => ['sometimes', 'email', 'max:255'],
+            'current_password' => ['nullable', 'string'],
             'password' => ['sometimes', 'confirmed', Password::min(8)],
         ]);
 
         if (isset($data['name'])) {
             $user->name = $data['name'];
         }
+        if (isset($data['email']) && $data['email'] !== $user->email) {
+            $user->email = $data['email'];
+        }
         if (isset($data['password'])) {
+            if (empty($data['current_password'])) {
+                return response()->json(['success' => false, 'error' => 'Current password is required to change password'], 400);
+            }
+            if (!Hash::check($data['current_password'], $user->password)) {
+                return response()->json(['success' => false, 'error' => 'Current password is incorrect'], 400);
+            }
             $user->password = Hash::make($data['password']);
         }
         $user->save();

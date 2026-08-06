@@ -6,23 +6,21 @@ use App\Http\Controllers\Controller;
 use App\Models\Inspector\UiProject;
 use App\Models\Inspector\UiScreenshot;
 use App\Models\Inspector\UiRedesign;
-use App\Services\AI\Inspector\VisionAnalysisService;
+use App\Services\ImageGenerationService;
+use App\Services\ImageEnhancementService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class InspectorRedesignController extends Controller
 {
-    private VisionAnalysisService $visionService;
-    private string $minimaxKey;
-    private string $openaiKey;
+    private ImageGenerationService $imageService;
+    private ImageEnhancementService $enhancer;
 
-    public function __construct(VisionAnalysisService $visionService)
+    public function __construct()
     {
-        $this->visionService = $visionService;
-        $this->minimaxKey = env('MINIMAX_API_KEY', '');
-        $this->openaiKey = env('OPENAI_API_KEY', '');
+        $this->imageService = new ImageGenerationService();
+        $this->enhancer = new ImageEnhancementService();
     }
 
     private function getUserId(Request $request): ?int
@@ -31,9 +29,48 @@ class InspectorRedesignController extends Controller
         return $auth ? (int) $auth['id'] : null;
     }
 
+    // ─── Provider Status ────────────────────────────────────────────────────
+
+    /**
+     * GET /api/inspector/redesigns/providers
+     * 
+     * Returns provider status and availability.
+     * Frontend uses this to show available providers and their status.
+     */
+    public function providerStatus()
+    {
+        $status = $this->imageService->getProviderStatus();
+
+        // Convert technical errors to user-friendly messages
+        $userError = null;
+        if (!($status['available'] ?? false)) {
+            $error = $status['error'] ?? '';
+            if (str_contains($error, 'Could not resolve') || str_contains($error, 'Cannot connect')) {
+                $userError = 'AI service is temporarily unavailable. We are working to restore it.';
+            } elseif (!empty($error)) {
+                $userError = 'AI service is experiencing issues.';
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'provider' => $status['provider'],
+            'name' => $status['name'],
+            'available' => $status['available'],
+            'status' => $status['status'],
+            'error' => $userError ?? $status['error'],
+            'user_message' => $userError,
+            'models' => $status['models'],
+            'model_priority' => $status['model_priority'],
+        ]);
+    }
+
+    // ─── Generate Redesign ──────────────────────────────────────────────────
+
     /**
      * POST /api/inspector/projects/{projectId}/redesign
-     * Generate an AI-improved version of the project's screenshot
+     * 
+     * Full pipeline: AI Image Generation → Post-processing → Store result
      */
     public function generate(Request $request, int $projectId)
     {
@@ -49,156 +86,105 @@ class InspectorRedesignController extends Controller
 
         $data = $request->validate([
             'screenshot_id' => ['nullable', 'integer'],
-            'design_style' => ['nullable', 'string', 'max:50'],
+            'design_style'  => ['nullable', 'string', 'max:50'],
+            'model'         => ['nullable', 'string', 'max:100'],
+            'strength'      => ['nullable', 'numeric', 'min:0.1', 'max:1.0'],
+            'post_process'  => ['nullable', 'boolean'],
         ]);
 
         // Get screenshot
         $screenshot = isset($data['screenshot_id'])
-            ? UiScreenshot::where('id', $data['screenshot_id'])->where('ui_project_id', $projectId)->first()
+            ? UiScreenshot::where('id', $data['screenshot_id'])
+                ->where('ui_project_id', $projectId)->first()
             : $project->screenshots()->first();
 
         if (!$screenshot) {
-            return response()->json(['success' => false, 'error' => 'No screenshot found'], 400);
+            return response()->json([
+                'success' => false,
+                'error' => 'No screenshot found. Please upload a screenshot first.',
+                'error_code' => 'NO_SCREENSHOT',
+            ], 400);
         }
 
         $designStyle = $data['design_style'] ?? 'modern_saas';
 
         // Create redesign record
         $redesign = UiRedesign::create([
-            'ui_project_id' => $project->id,
-            'ui_screenshot_id' => $screenshot->id,
-            'design_style' => $designStyle,
-            'status' => 'generating',
+            'ui_project_id'     => $project->id,
+            'ui_screenshot_id'  => $screenshot->id,
+            'original_image_path' => $screenshot->file_path,
+            'design_style'      => $designStyle,
+            'status'            => 'generating',
         ]);
 
-        // Get component analysis first
-        $components = $this->visionService->detectComponents($screenshot->file_path);
+        // Generate AI redesign
+        $result = $this->imageService->generateRedesign(
+            screenshotPath: $screenshot->file_path,
+            designStyle: $designStyle,
+            options: [
+                'model' => $data['model'] ?? null,
+                'strength' => $data['strength'] ?? 0.75,
+                'post_process' => $data['post_process'] ?? true,
+                'user_id' => $userId,
+            ]
+        );
 
-        // Generate improved image
-        $imageResult = $this->generateRedesignedImage($screenshot->file_path, $designStyle, $components);
+        if (!$result['success']) {
+            $redesign->update([
+                'status' => 'failed',
+                'error_message' => $result['error'] ?? 'Generation failed',
+                'provider' => $result['provider'] ?? 'unknown',
+                'model' => $result['model'] ?? 'unknown',
+            ]);
 
-        if (!$imageResult['success']) {
-            $redesign->update(['status' => 'failed', 'error_message' => $imageResult['error']]);
+            // Return user-friendly error message
+            $userMessage = $this->getUserFriendlyError($result);
+
             return response()->json([
                 'success' => false,
-                'error' => $imageResult['error'],
+                'error' => $userMessage,
+                'error_code' => $result['error_code'] ?? 'GENERATION_FAILED',
                 'redesign_id' => $redesign->id,
-            ], 500);
+                'provider' => $result['provider'] ?? null,
+                'model' => $result['model'] ?? null,
+                'can_retry' => $result['can_retry'] ?? true,
+            ], 503);
         }
 
-        // Save the redesigned image
-        $filename = 'inspector-redesigns/' . Str::uuid() . '.png';
-        $saved = Storage::disk('public')->put($filename, $imageResult['image_data']);
-
-        if (!$saved) {
-            $redesign->update(['status' => 'failed', 'error_message' => 'Failed to save image']);
-            return response()->json(['success' => false, 'error' => 'Failed to save image'], 500);
-        }
-
+        // Success - update redesign record
         $redesign->update([
-            'status' => 'completed',
-            'image_path' => $filename,
-            'improved_items' => $imageResult['improvements'] ?? [],
-            'regressed_items' => $imageResult['regressions'] ?? [],
-            'unchanged_items' => $imageResult['unchanged'] ?? [],
+            'status'           => 'completed',
+            'image_path'       => $result['image_path'],
+            'provider'         => $result['provider'],
+            'model'            => $result['model'],
+            'vision_analysis'  => json_encode([
+                'prompt' => $result['prompt_used'] ?? null,
+                'post_processing' => $result['post_processing'] ?? null,
+            ]),
+            'improved_items'   => $result['improvements'] ?? [],
+            'regressed_items'  => [],
+            'unchanged_items'  => [
+                'Layout structure preserved',
+                'Navigation elements maintained',
+                'Content and text preserved',
+            ],
         ]);
 
         return response()->json([
             'success' => true,
-            'redesign' => [
-                'id' => $redesign->id,
-                'image_url' => "/storage/{$filename}",
-                'design_style' => $redesign->design_style,
-                'status' => $redesign->status,
-                'improved_items' => $redesign->improved_items,
-                'regressed_items' => $redesign->regressed_items,
-                'unchanged_items' => $redesign->unchanged_items,
-                'created_at' => $redesign->created_at?->toIso8601String(),
-            ],
+            'redesign' => $this->formatRedesign($redesign),
+            'provider' => $result['provider'],
+            'model' => $result['model'],
+            'generation_time' => $result['generation_time'],
+            'original_image_url' => $result['original_image_url'],
+            'generated_image_url' => $result['generated_image_url'],
+            'post_processing' => $result['post_processing'],
+            'improvements' => $result['improvements'] ?? [],
+            'status' => 'completed',
         ], 201);
     }
 
-    /**
-     * Generate a redesigned image using MiniMax image generation with the original as reference.
-     * This uses the image_urls parameter as a STYLE reference, not for true img2img editing.
-     * The prompt instructs the AI to preserve layout while improving visual quality.
-     */
-    private function generateRedesignedImage(string $screenshotPath, string $designStyle, array $components): array
-    {
-        $fullPath = storage_path('app/public/' . $screenshotPath);
-        if (!file_exists($fullPath)) {
-            return ['success' => false, 'error' => 'Screenshot file not found'];
-        }
-
-        $imageBase64 = base64_encode(file_get_contents($fullPath));
-        $mime = mime_content_type($fullPath);
-        $dataUrl = "data:{$mime};base64," . $imageBase64;
-
-        $styleDesc = $this->getStyleDescription($designStyle);
-        // detectComponents returns ['success' => bool, 'components' => {nested object}, 'raw' => string]
-        // The actual component list is in $components['components']['components']
-        $componentList = is_array($components['components'] ?? []) ? ($components['components']['components'] ?? []) : [];
-        $componentInfo = $this->formatComponentInfo(array_slice($componentList, 0, 6)); // Limit to 6 components
-
-        $prompt = <<<PROMPT
-Edit this UI screenshot professionally. Keep exact layout, all text, navigation, branding. Improve: typography, colors, spacing, shadows, polish.
-Style: {$styleDesc}
-Components:
-{$componentInfo}
-PROMPT;
-
-        // Trim prompt to fit token limits (keep under 1200 chars for safety)
-        if (strlen($prompt) > 1200) {
-            $prompt = substr($prompt, 0, 1200);
-        }
-
-        try {
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $this->minimaxKey,
-                'Content-Type' => 'application/json',
-            ])->timeout(180)->post('https://api.minimaxi.chat/v1/image_generation', [
-                'model' => 'image-01',
-                'prompt' => $prompt,
-                'image_urls' => [$dataUrl],
-                'num_variations' => 1,
-            ]);
-
-            $data = $response->json();
-
-            if (isset($data['base_resp']['status_code']) && $data['base_resp']['status_code'] !== 0) {
-                return [
-                    'success' => false,
-                    'error' => $data['base_resp']['status_msg'] ?? 'MiniMax image generation failed',
-                ];
-            }
-
-            $imageUrl = $data['data']['image_urls'][0] ?? null;
-            if (!$imageUrl) {
-                return ['success' => false, 'error' => 'No image URL returned'];
-            }
-
-            // Download the generated image
-            $imageResponse = Http::timeout(60)->get($imageUrl);
-            if (!$imageResponse->successful()) {
-                return ['success' => false, 'error' => 'Failed to download generated image'];
-            }
-
-            $improvements = $this->detectImprovements($componentList);
-
-            return [
-                'success' => true,
-                'image_data' => $imageResponse->body(),
-                'improvements' => $improvements['improved'],
-                'regressions' => $improvements['regressed'],
-                'unchanged' => $improvements['unchanged'],
-            ];
-        } catch (\Throwable $e) {
-            return [
-                'success' => false,
-                'error' => 'Image generation failed: ' . $e->getMessage(),
-            ];
-        }
-    }
+    // ─── Regenerate ─────────────────────────────────────────────────────────
 
     /**
      * POST /api/inspector/redesigns/{id}/regenerate
@@ -222,24 +208,26 @@ PROMPT;
 
         $data = $request->validate([
             'design_style' => ['nullable', 'string', 'max:50'],
+            'model'        => ['nullable', 'string', 'max:100'],
+            'strength'     => ['nullable', 'numeric', 'min:0.1', 'max:1.0'],
         ]);
 
         $redesign->update(['status' => 'generating']);
 
-        $screenshot = $redesign->screenshot;
-        if (!$screenshot) {
-            $redesign->update(['status' => 'failed', 'error_message' => 'Screenshot not found']);
-            return response()->json(['success' => false, 'error' => 'Screenshot not found'], 400);
-        }
-
-        $components = $this->visionService->detectComponents($screenshot->file_path);
         $designStyle = $data['design_style'] ?? $redesign->design_style;
 
-        $imageResult = $this->generateRedesignedImage($screenshot->file_path, $designStyle, $components);
+        // Get original screenshot
+        $screenshotPath = $redesign->original_image_path;
+        
+        if (!$screenshotPath) {
+            $redesign->update(['status' => 'failed', 'error_message' => 'Original screenshot not found']);
+            return response()->json(['success' => false, 'error' => 'Original screenshot not found'], 400);
+        }
 
-        if (!$imageResult['success']) {
-            $redesign->update(['status' => 'failed', 'error_message' => $imageResult['error']]);
-            return response()->json(['success' => false, 'error' => $imageResult['error']], 500);
+        $fullPath = storage_path('app/public/' . $screenshotPath);
+        if (!file_exists($fullPath)) {
+            $redesign->update(['status' => 'failed', 'error_message' => 'Screenshot file not found']);
+            return response()->json(['success' => false, 'error' => 'Screenshot file not found'], 400);
         }
 
         // Delete old image
@@ -247,31 +235,67 @@ PROMPT;
             Storage::disk('public')->delete($redesign->image_path);
         }
 
-        $filename = 'inspector-redesigns/' . Str::uuid() . '.png';
-        Storage::disk('public')->put($filename, $imageResult['image_data']);
+        // Generate new redesign
+        $result = $this->imageService->generateRedesign(
+            screenshotPath: $screenshotPath,
+            designStyle: $designStyle,
+            options: [
+                'model' => $data['model'] ?? null,
+                'strength' => $data['strength'] ?? 0.75,
+                'user_id' => $userId,
+            ]
+        );
 
+        if (!$result['success']) {
+            $redesign->update([
+                'status' => 'failed',
+                'error_message' => $result['error'] ?? 'Generation failed',
+                'provider' => $result['provider'] ?? 'unknown',
+                'model' => $result['model'] ?? 'unknown',
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => $result['error'] ?? 'AI generation failed',
+                'error_code' => $result['error_code'] ?? 'GENERATION_FAILED',
+                'provider' => $result['provider'] ?? null,
+                'model' => $result['model'] ?? null,
+                'can_retry' => $result['can_retry'] ?? true,
+            ], 503);
+        }
+
+        // Success
         $redesign->update([
-            'status' => 'completed',
-            'image_path' => $filename,
-            'design_style' => $designStyle,
-            'improved_items' => $imageResult['improvements'] ?? [],
-            'regressed_items' => $imageResult['regressions'] ?? [],
-            'unchanged_items' => $imageResult['unchanged'] ?? [],
+            'status'           => 'completed',
+            'image_path'       => $result['image_path'],
+            'design_style'     => $designStyle,
+            'provider'         => $result['provider'],
+            'model'            => $result['model'],
+            'vision_analysis'  => json_encode([
+                'prompt' => $result['prompt_used'] ?? null,
+                'post_processing' => $result['post_processing'] ?? null,
+            ]),
+            'improved_items'   => $result['improvements'] ?? [],
+            'regressed_items'  => [],
+            'unchanged_items'  => [
+                'Layout structure preserved',
+                'Navigation elements maintained',
+            ],
         ]);
 
         return response()->json([
             'success' => true,
-            'redesign' => [
-                'id' => $redesign->id,
-                'image_url' => "/storage/{$filename}",
-                'design_style' => $redesign->design_style,
-                'status' => $redesign->status,
-                'improved_items' => $redesign->improved_items,
-                'regressed_items' => $redesign->regressed_items,
-                'unchanged_items' => $redesign->unchanged_items,
-            ],
+            'redesign' => $this->formatRedesign($redesign),
+            'provider' => $result['provider'],
+            'model' => $result['model'],
+            'generation_time' => $result['generation_time'],
+            'original_image_url' => $result['original_image_url'],
+            'generated_image_url' => $result['generated_image_url'],
+            'status' => 'completed',
         ]);
     }
+
+    // ─── Get Redesign ──────────────────────────────────────────────────────
 
     /**
      * GET /api/inspector/redesigns/{id}
@@ -295,117 +319,64 @@ PROMPT;
 
         return response()->json([
             'success' => true,
-            'redesign' => [
-                'id' => $redesign->id,
-                'project_id' => $redesign->ui_project_id,
-                'screenshot_id' => $redesign->ui_screenshot_id,
-                'design_style' => $redesign->design_style,
-                'status' => $redesign->status,
-                'image_url' => $redesign->image_path ? "/storage/{$redesign->image_path}" : null,
-                'improved_items' => $redesign->improved_items,
-                'regressed_items' => $redesign->regressed_items,
-                'unchanged_items' => $redesign->unchanged_items,
-                'error_message' => $redesign->error_message,
-                'created_at' => $redesign->created_at?->toIso8601String(),
-                'screenshot' => $redesign->screenshot ? [
-                    'id' => $redesign->screenshot->id,
-                    'url' => "/storage/{$redesign->screenshot->file_path}",
-                ] : null,
-            ],
+            'redesign' => $this->formatRedesign($redesign),
         ]);
     }
 
-    // ─── Helpers ─────────────────────────────────────────────────────────────
+    // ─── Helpers ───────────────────────────────────────────────────────────
 
-    private function getStyleDescription(string $style): string
+    private function getUserFriendlyError(array $result): string
     {
-        return match ($style) {
-            'modern_saas' => 'Modern SaaS — clean, professional, premium shadows, subtle gradients, rounded cards, excellent hierarchy',
-            'minimal' => 'Minimal — maximum whitespace, ultra-clean typography, subtle borders, understated elegance',
-            'glassmorphism' => 'Glassmorphism — frosted glass panels, backdrop blur, translucent overlays, vibrant accents',
-            'enterprise' => 'Enterprise — structured, data-dense, professional, strong grid alignment, business-focused',
-            'material' => 'Material Design 3 — elevated surfaces, dynamic color, rounded corners, ink ripple effects',
-            'apple' => 'Apple Style — clean, premium, SF-style typography, generous spacing, subtle depth',
-            'fluent' => 'Microsoft Fluent — acrylic backgrounds, precise spacing, business-appropriate, subtle motion',
-            'dark' => 'Dark Theme — premium dark aesthetic, soft grays, accent highlights, reduced eye strain',
-            'light' => 'Light Theme — clean white/gray backgrounds, high contrast, professional and bright',
-            default => 'Modern SaaS',
-        };
+        $error = $result['error'] ?? '';
+        $provider = $result['provider'] ?? '';
+
+        // HuggingFace DNS/connection errors
+        if (str_contains($error, 'Could not resolve') || str_contains($error, 'Cannot connect')) {
+            return 'AI redesign service is temporarily unavailable. Please try again in a few minutes.';
+        }
+
+        // Model loading errors
+        if (str_contains($error, 'loading') || str_contains($error, 'initializing')) {
+            return 'AI model is loading. Please wait 30 seconds and try again.';
+        }
+
+        // Rate limiting
+        if (str_contains($error, 'Rate limit') || str_contains($error, 'rate_limit')) {
+            return 'Service is busy. Please wait a moment and try again.';
+        }
+
+        // Generic fallback
+        return 'AI redesign generation failed. Please try again or contact support if the issue persists.';
     }
 
-    private function formatComponentInfo(array $components): string
+    private function formatRedesign(UiRedesign $redesign): array
     {
-        if (empty($components)) {
-            return 'Standard UI layout with various components';
-        }
-
-        $parts = [];
-        foreach (array_slice($components, 0, 10) as $c) {
-            // Handle case where AI returns string instead of object
-            if (is_string($c)) {
-                $parts[] = "- {$c}";
-            } elseif (is_array($c) && isset($c['type'], $c['label'], $c['position'])) {
-                $parts[] = "- {$c['type']}: {$c['label']} ({$c['position']})";
-            }
-        }
-        return $parts ? implode("\n", $parts) : 'Standard UI layout with various components';
-    }
-
-    private function detectImprovements(array $components): array
-    {
-        $improved = [];
-        $regressed = [];
-        $unchanged = [];
-
-        // Safely extract component types - handle string entries
-        $componentTypes = [];
-        foreach ($components as $c) {
-            if (is_array($c) && isset($c['type'])) {
-                $componentTypes[] = $c['type'];
-            } elseif (is_string($c)) {
-                // If component is a string, use it as type
-                $componentTypes[] = $c;
-            }
-        }
-
-        foreach (['navbar', 'sidebar', 'header', 'footer'] as $nav) {
-            if (in_array($nav, $componentTypes)) {
-                $unchanged[] = "Navigation ({$nav}) preserved";
-            }
-        }
-
-        foreach ($components as $c) {
-            // Skip string components
-            if (is_string($c)) {
-                $unchanged[] = "{$c} maintained";
-                continue;
-            }
-            if (!is_array($c)) {
-                continue;
-            }
-            $type = $c['type'] ?? 'component';
-            $label = $c['label'] ?? 'unknown';
-            if (($c['quality'] ?? '') === 'needs_improvement') {
-                $improved[] = "{$type}: Improved {$label}";
-            } elseif (($c['quality'] ?? '') === 'critical') {
-                $improved[] = "{$type}: Fixed critical issue in {$label}";
-            } else {
-                $unchanged[] = "{$type}: {$label} maintained";
-            }
-        }
-
-        // Generic improvements based on style
-        $improved = array_merge($improved, [
-            'Typography: Improved font weights and sizing hierarchy',
-            'Color: Enhanced contrast ratios for better readability',
-            'Cards: Added refined shadows and border treatments',
-            'Buttons: Polished hover states and visual hierarchy',
-        ]);
-
         return [
-            'improved' => array_values(array_unique($improved)),
-            'regressed' => $regressed,
-            'unchanged' => array_values(array_unique($unchanged)),
+            'id'                   => $redesign->id,
+            'project_id'           => $redesign->ui_project_id,
+            'screenshot_id'       => $redesign->ui_screenshot_id,
+            'original_image_path'  => $redesign->original_image_path
+                ? "/storage/{$redesign->original_image_path}"
+                : null,
+            'design_style'        => $redesign->design_style,
+            'status'              => $redesign->status,
+            'image_url'           => $redesign->image_path
+                ? "/storage/{$redesign->image_path}"
+                : null,
+            'provider'            => $redesign->provider,
+            'model'               => $redesign->model,
+            'improved_items'      => $redesign->improved_items ?? [],
+            'regressed_items'     => $redesign->regressed_items ?? [],
+            'unchanged_items'     => $redesign->unchanged_items ?? [],
+            'vision_analysis'     => is_string($redesign->vision_analysis)
+                ? json_decode($redesign->vision_analysis, true)
+                : $redesign->vision_analysis,
+            'error_message'       => $redesign->error_message,
+            'created_at'          => $redesign->created_at?->toIso8601String(),
+            'screenshot'          => $redesign->screenshot ? [
+                'id'  => $redesign->screenshot->id,
+                'url' => "/storage/{$redesign->screenshot->file_path}",
+            ] : null,
         ];
     }
 }

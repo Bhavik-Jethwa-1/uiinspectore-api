@@ -476,24 +476,20 @@ class MiniMaxService
             return $url;
         }
 
-        // Handle absolute filesystem paths — read directly
+        // Handle absolute filesystem paths — read directly with compression for large images
         if (str_starts_with($url, '/') && file_exists($url)) {
-            $mime = mime_content_type($url);
-            return 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($url));
+            return $this->compressImageForVision($url);
         }
 
         // Resolve relative URLs (storage/... paths)
         if (!str_starts_with($url, 'http')) {
             $fullPath = storage_path('app/public/' . $url);
             if (file_exists($fullPath)) {
-                $mime = mime_content_type($fullPath);
-                return 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($fullPath));
+                return $this->compressImageForVision($fullPath);
             }
             // Try as absolute path from storage/
             if (file_exists(storage_path($url))) {
-                $fullPath = storage_path($url);
-                $mime = mime_content_type($fullPath);
-                return 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($fullPath));
+                return $this->compressImageForVision(storage_path($url));
             }
             return $url;
         }
@@ -534,6 +530,67 @@ class MiniMaxService
             'svg'  => 'image/svg+xml',
             default => 'image/png',
         };
+    }
+
+    /**
+     * Compress an image file for vision API transmission.
+     * Resizes to max 1024px width, converts to JPEG at 80% quality.
+     * Dramatically reduces base64 payload size and transmission time.
+     */
+    private function compressImageForVision(string $filePath): string
+    {
+        $fileSize = filesize($filePath);
+        // Skip compression for small files (< 20KB) to avoid unnecessary processing
+        if ($fileSize < 20 * 1024) {
+            $mime = mime_content_type($filePath);
+            return 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($filePath));
+        }
+
+        $maxDim = 1024;
+        $img = null;
+        $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+
+        if ($ext === 'png') {
+            $img = imagecreatefrompng($filePath);
+        } elseif (in_array($ext, ['jpg', 'jpeg'])) {
+            $img = imagecreatefromjpeg($filePath);
+        } elseif ($ext === 'webp') {
+            $img = imagecreatefromwebp($filePath);
+        } elseif ($ext === 'gif') {
+            $img = imagecreatefromgif($filePath);
+        }
+
+        if (!$img) {
+            // Fallback: return original
+            $mime = mime_content_type($filePath);
+            return 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($filePath));
+        }
+
+        $origW = imagesx($img);
+        $origH = imagesy($img);
+
+        // Only resize if larger than maxDim
+        if ($origW > $maxDim || $origH > $maxDim) {
+            $ratio = min($maxDim / $origW, $maxDim / $origH);
+            $newW  = (int) round($origW * $ratio);
+            $newH  = (int) round($origH * $ratio);
+            $resized = imagecreatetruecolor($newW, $newH);
+            imagecopy($resized, $img, 0, 0, 0, 0, $newW, $newH);
+            if ($ext === 'png') {
+                imagealphablending($resized, false);
+                imagesavealpha($resized, true);
+            }
+            imagedestroy($img);
+            $img = $resized;
+        }
+
+        // Convert to JPEG at 80% quality
+        ob_start();
+        imagejpeg($img, null, 80);
+        $jpegData = ob_get_clean();
+        imagedestroy($img);
+
+        return 'data:image/jpeg;base64,' . base64_encode($jpegData);
     }
 
     /**
@@ -988,6 +1045,27 @@ class MiniMaxService
         $imageUrls = $response['data']['image_urls'] ?? [];
 
         if (empty($imageUrls)) {
+            \Log::error('IMAGE_ERROR', [
+                'service'  => 'MiniMaxService',
+                'provider' => 'minimax',
+                'model'    => 'image-01',
+                'error'    => 'MiniMax returned empty image_urls',
+                'http_code' => $httpCode,
+                'raw'       => substr($raw ?: '', 0, 500),
+                'response'  => $response,
+            ]);
+            // Detect credit limit from base_resp.status_code
+            $baseResp = $response['base_resp'] ?? [];
+            $statusCode = $baseResp['status_code'] ?? 0;
+            $statusMsg = $baseResp['status_msg'] ?? '';
+            if ($statusCode === 2056 || str_contains($statusMsg, 'usage limit') || str_contains($statusMsg, 'credits')) {
+                return [
+                    'error' => 'MiniMax usage limit reached. Please add credits to your MiniMax account.',
+                    'status' => 429,
+                    'model'  => 'image-01',
+                    'raw'    => substr($raw ?: '', 0, 500),
+                ];
+            }
             return [
                 'error' => 'MiniMax returned no images',
                 'status' => 500,

@@ -234,6 +234,55 @@ class InspectorProjectController extends Controller
     {
         $base = $this->formatProject($project);
 
+        // Also include singular `review` (latest) and `redesign` (latest) for backward compatibility
+        $latestReview = $project->reviews->sortByDesc('created_at')->first();
+        $latestRedesign = $project->redesigns->sortByDesc('created_at')->first();
+        $base['review'] = $latestReview ? [
+            'id' => $latestReview->id,
+            'status' => $latestReview->status,
+            'scores' => $latestReview->scores,
+            'summary' => $latestReview->summary,
+            'created_at' => $latestReview->created_at?->toIso8601String(),
+            'annotations' => $latestReview->annotations->map(fn($a) => [
+                'id' => $a->id,
+                'number' => $a->number,
+                'type' => $a->type,
+                'severity' => $a->severity,
+                'x' => $a->x,
+                'y' => $a->y,
+                'width' => $a->width,
+                'height' => $a->height,
+                'title' => $a->title,
+                'description' => $a->description,
+                'suggested_fix' => $a->suggested_fix,
+                'expected_improvement' => $a->expected_improvement,
+                'difficulty' => $a->difficulty,
+                'component_type' => $a->component_type,
+            ])->toArray(),
+            'suggestions' => $latestReview->suggestions->map(fn($s) => [
+                'id' => $s->id,
+                'category' => $s->category,
+                'title' => $s->title,
+                'description' => $s->description,
+                'suggested_fix' => $s->suggested_fix,
+                'expected_improvement' => $s->expected_improvement,
+                'difficulty' => $s->difficulty,
+                'priority' => $s->priority,
+                'implemented' => $s->implemented,
+            ])->toArray(),
+        ] : null;
+        $base['redesign'] = $latestRedesign ? [
+            'id' => $latestRedesign->id,
+            'status' => $latestRedesign->status,
+            'design_style' => $latestRedesign->design_style,
+            'image_url' => $latestRedesign->image_path ? "/storage/{$latestRedesign->image_path}" : null,
+            'improved_items' => $latestRedesign->improved_items,
+            'regressed_items' => $latestRedesign->regressed_items,
+            'unchanged_items' => $latestRedesign->unchanged_items,
+            'score_comparison' => $latestRedesign->score_comparison,
+            'created_at' => $latestRedesign->created_at?->toIso8601String(),
+        ] : null;
+
         // Include all reviews with annotations and suggestions
         $base['reviews'] = $project->reviews->map(fn($r) => [
             'id' => $r->id,

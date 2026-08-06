@@ -375,6 +375,13 @@ Route::prefix('inspector')->middleware('inspector.auth')->group(function () {
     Route::post  ('/projects/{projectId}/redesign',     [\App\Http\Controllers\Api\Inspector\InspectorRedesignController::class, 'generate']);
     Route::post  ('/redesigns/{id}/regenerate',         [\App\Http\Controllers\Api\Inspector\InspectorRedesignController::class, 'regenerate']);
     Route::get   ('/redesigns/{id}',                    [\App\Http\Controllers\Api\Inspector\InspectorRedesignController::class, 'show']);
+    Route::get   ('/redesigns/providers',              [\App\Http\Controllers\Api\Inspector\InspectorRedesignController::class, 'providerStatus']);
+
+    // Code Generation (React + Tailwind)
+    Route::get   ('/codes/{redesignId}',                 [\App\Http\Controllers\Api\Inspector\InspectorCodeController::class, 'show']);
+    Route::post  ('/codes/{redesignId}/generate',        [\App\Http\Controllers\Api\Inspector\InspectorCodeController::class, 'generate']);
+    Route::get   ('/codes/{redesignId}/download',        [\App\Http\Controllers\Api\Inspector\InspectorCodeController::class, 'download']);
+    Route::get   ('/codes/providers',                    [\App\Http\Controllers\Api\Inspector\InspectorCodeController::class, 'providerStatus']);
 });
 
 // ─── Stripe Webhooks (no auth — Stripe signs with webhook secret) ───────────

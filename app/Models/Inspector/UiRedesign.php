@@ -12,8 +12,9 @@ class UiRedesign extends Model
 
     protected $fillable = [
         'ui_project_id', 'ui_screenshot_id', 'design_style', 'status',
-        'image_path', 'improved_items', 'regressed_items', 'unchanged_items',
-        'score_comparison', 'error_message',
+        'image_path', 'original_image_path', 'provider', 'model',
+        'improved_items', 'regressed_items', 'unchanged_items',
+        'score_comparison', 'error_message', 'vision_analysis',
     ];
 
     protected $casts = [
