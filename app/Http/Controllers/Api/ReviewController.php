@@ -54,10 +54,16 @@ class ReviewController extends Controller
 
     public function show(Request $request, int $id): JsonResponse
     {
-        $review = $request->user()
-            ->reviews()
-            ->with(['project', 'screenshot', 'score', 'issues', 'annotations', 'suggestions'])
-            ->findOrFail($id);
+        $user = $request->user();
+        if ($user->is_admin) {
+            // Admins can view any review
+            $review = Review::with(['project', 'screenshot', 'score', 'issues', 'annotations', 'suggestions'])
+                ->findOrFail($id);
+        } else {
+            $review = $user->reviews()
+                ->with(['project', 'screenshot', 'score', 'issues', 'annotations', 'suggestions'])
+                ->findOrFail($id);
+        }
 
         return response()->json(['review' => $this->formatReviewFull($review)]);
     }
@@ -230,6 +236,14 @@ class ReviewController extends Controller
                 'y' => $a->y,
                 'width' => $a->width,
                 'height' => $a->height,
+                'issue' => $a->issue ? [
+                    'id' => $a->issue->id,
+                    'title' => $a->issue->title,
+                    'severity' => $a->issue->severity,
+                    'category' => $a->issue->category,
+                    'description' => $a->issue->description,
+                    'recommendation' => $a->issue->recommendation,
+                ] : null,
             ]),
             'suggestions' => $review->suggestions->map(fn($s) => [
                 'id' => $s->id,
