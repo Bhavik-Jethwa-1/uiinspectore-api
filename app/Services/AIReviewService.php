@@ -145,6 +145,26 @@ EOT;
             return $this->callAnthropic($prompt, $imageBase64, $mimeType);
         }
 
+        if ($this->provider === 'ollama') {
+            return $this->callOllama($prompt, $imageBase64, $mimeType);
+        }
+
+        if ($this->provider === 'groq') {
+            return $this->callGroq($prompt, $imageBase64, $mimeType);
+        }
+
+        if ($this->provider === 'gemini') {
+            return $this->callGemini($prompt, $imageBase64, $mimeType);
+        }
+
+        if ($this->provider === 'cloudflare') {
+            return $this->callCloudflare($prompt, $imageBase64, $mimeType);
+        }
+
+        if ($this->provider === 'xai') {
+            return $this->callXAI($prompt, $imageBase64, $mimeType);
+        }
+
         throw new \Exception("AI provider '{$this->provider}' not supported");
     }
 
@@ -263,6 +283,263 @@ EOT;
         return $body['content'][0]['text'] ?? '';
     }
 
+    private function callOllama(string $prompt, string $imageBase64, string $mimeType): string
+    {
+        $baseUrl = config('ai.ollama.base_url', 'http://127.0.0.1:11434');
+        $model = config('ai.ollama.model', 'llava');
+
+        $response = Http::timeout(180)
+            ->withHeaders(['Content-Type' => 'application/json'])
+            ->post("{$baseUrl}/api/generate", [
+                'model' => $model,
+                'prompt' => $prompt,
+                'images' => [$imageBase64],
+                'stream' => false,
+            ]);
+
+        if ($response->failed()) {
+            $status = $response->status();
+            $body = $response->body();
+            Log::error('Ollama API error', ['status' => $status, 'body' => $body]);
+            throw new AIResponseException($status, $body);
+        }
+
+        $body = $response->json();
+        return $body['response'] ?? '';
+    }
+
+    private function callGroq(string $prompt, string $imageBase64, string $mimeType): string
+    {
+        $apiKey = config('ai.groq.api_key');
+        $model = config('ai.groq.model', 'llama-3.2-11b-vision-preview');
+
+        if (empty($apiKey)) {
+            throw new \Exception('Groq API key not configured. Add AI_GROQ_API_KEY to your .env file.');
+        }
+
+        $dataUrl = "data:{$mimeType};base64,{$imageBase64}";
+
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer ' . $apiKey,
+            'Content-Type' => 'application/json',
+        ])->timeout(120)->post('https://api.groq.com/v1/chat/completions', [
+            'model' => $model,
+            'messages' => [
+                [
+                    'role' => 'user',
+                    'content' => [
+                        ['type' => 'text', 'text' => $prompt],
+                        ['type' => 'image_url', 'image_url' => ['url' => $dataUrl]],
+                    ],
+                ],
+            ],
+            'max_tokens' => 4000,
+        ]);
+
+        if ($response->failed()) {
+            $status = $response->status();
+            $body = $response->body();
+            Log::error('Groq API error', ['status' => $status, 'body' => $body]);
+
+            if ($status === 429) {
+                throw new AIResponseException(429, $body);
+            }
+            if (in_array($status, [401, 403])) {
+                throw new AIResponseException($status, $body);
+            }
+
+            throw new AIResponseException($status, $body);
+        }
+
+        $body = $response->json();
+
+        return $body['choices'][0]['message']['content'] ?? '';
+    }
+
+    private function callGemini(string $prompt, string $imageBase64, string $mimeType): string
+    {
+        $apiKey = config('ai.gemini.api_key');
+        $model = config('ai.gemini.model', 'gemini-1.5-flash');
+
+        if (empty($apiKey)) {
+            throw new \Exception('Gemini API key not configured. Add AI_GEMINI_API_KEY to your .env file.');
+        }
+
+        $mimeToGemini = [
+            'image/png' => 'image/png',
+            'image/jpeg' => 'image/jpeg',
+            'image/webp' => 'image/webp',
+        ];
+        $geminiMime = $mimeToGemini[$mimeType] ?? 'image/png';
+
+        $response = Http::timeout(120)
+            ->withHeaders(['Content-Type' => 'application/json'])
+            ->post(
+                "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}",
+                [
+                    'contents' => [
+                        [
+                            'parts' => [
+                                ['text' => $prompt],
+                                [
+                                    'inline_data' => [
+                                        'mime_type' => $geminiMime,
+                                        'data' => $imageBase64,
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                    'generationConfig' => [
+                        'maxOutputTokens' => 4096,
+                        'temperature' => 0.7,
+                    ],
+                ]
+            );
+
+        if ($response->failed()) {
+            $status = $response->status();
+            $body = $response->body();
+            Log::error('Gemini API error', ['status' => $status, 'body' => $body]);
+
+            if ($status === 429) {
+                throw new AIResponseException(429, $body);
+            }
+            if (in_array($status, [401, 403])) {
+                throw new AIResponseException($status, $body);
+            }
+
+            throw new AIResponseException($status, $body);
+        }
+
+        $body = $response->json();
+        $text = $body['candidates'][0]['content']['parts'][0]['text'] ?? '';
+
+        if (empty($text)) {
+            $promptFeedback = $body['promptFeedback'] ?? null;
+            if ($promptFeedback) {
+                Log::warning('Gemini empty response', ['promptFeedback' => $promptFeedback]);
+            }
+        }
+
+        return $text;
+    }
+
+    private function callCloudflare(string $prompt, string $imageBase64, string $mimeType): string
+    {
+        $accountId = config('ai.cloudflare.account_id');
+        $apiToken = config('ai.cloudflare.api_token');
+        $model = config('ai.cloudflare.model', '@cf/meta/llama-3.2-11b-vision-instruct');
+
+        if (empty($accountId) || empty($apiToken)) {
+            throw new \Exception('Cloudflare AI not configured. Set AI_CF_ACCOUNT_ID and AI_CF_API_TOKEN in .env');
+        }
+
+        $mimeToFormat = [
+            'image/png' => 'png',
+            'image/jpeg' => 'jpeg',
+            'image/webp' => 'webp',
+        ];
+        $format = $mimeToFormat[$mimeType] ?? 'png';
+
+        $response = Http::timeout(180)
+            ->withHeaders([
+                'Authorization' => 'Bearer ' . $apiToken,
+                'Content-Type' => 'application/json',
+            ])
+            ->post(
+                "https://api.cloudflare.com/client/v4/accounts/{$accountId}/ai/run/{$model}",
+                [
+                    'messages' => [
+                        [
+                            'role' => 'user',
+                            'content' => [
+                                ['type' => 'text', 'text' => $prompt],
+                                [
+                                    'type' => 'image_url',
+                                    'image_url' => [
+                                        'url' => "data:{$mimeType};base64,{$imageBase64}",
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ]
+            );
+
+        if ($response->failed()) {
+            $status = $response->status();
+            $body = $response->body();
+            Log::error('Cloudflare AI error', ['status' => $status, 'body' => $body]);
+
+            if ($status === 429) {
+                throw new AIResponseException(429, $body);
+            }
+            if (in_array($status, [401, 403])) {
+                throw new AIResponseException($status, $body);
+            }
+
+            throw new AIResponseException($status, $body);
+        }
+
+        $body = $response->json();
+        return $body['result']['response'] ?? '';
+    }
+
+    private function callXAI(string $prompt, string $imageBase64, string $mimeType): string
+    {
+        $apiKey = config('ai.xai.api_key');
+        $model = config('ai.xai.model', 'grok-2-vision-1212');
+
+        if (empty($apiKey)) {
+            throw new \Exception('xAI API key not configured. Add XAI_API_KEY to your .env file.');
+        }
+
+        $dataUrl = "data:{$mimeType};base64,{$imageBase64}";
+
+        $response = Http::timeout(120)
+            ->withHeaders([
+                'Authorization' => 'Bearer ' . $apiKey,
+                'Content-Type' => 'application/json',
+            ])
+            ->post('https://api.x.ai/v1/chat/completions', [
+                'model' => $model,
+                'messages' => [
+                    [
+                        'role' => 'user',
+                        'content' => [
+                            ['type' => 'text', 'text' => $prompt],
+                            [
+                                'type' => 'image_url',
+                                'image_url' => ['url' => $dataUrl],
+                            ],
+                        ],
+                    ],
+                ],
+                'max_tokens' => 4096,
+            ]);
+
+        if ($response->failed()) {
+            $status = $response->status();
+            $body = $response->body();
+            Log::error('xAI API error', ['status' => $status, 'body' => $body]);
+
+            if ($status === 429) {
+                throw new AIResponseException(429, $body);
+            }
+            if (in_array($status, [401, 403])) {
+                throw new AIResponseException($status, $body);
+            }
+
+            throw new AIResponseException($status, $body);
+        }
+
+        $body = $response->json();
+        $content = $body['choices'][0]['message']['content'] ?? '';
+
+        return $content;
+    }
+
     private function parseAndValidateResponse(string $rawResponse): array
     {
         // Try to extract JSON from the response
@@ -286,19 +563,33 @@ EOT;
             return $decoded;
         }
 
-        // Try to extract JSON from markdown code block
-        if (preg_match('/```(?:json)?\s*([\s\S]*?)\s*```/', $response, $matches)) {
+        // Try to extract JSON from markdown code block — look for ```json on its own line
+        // and capture content until a closing ``` that appears at the end of a line
+        if (preg_match('/```json\s*\n([\s\S]+?)\n```\s*$/s', $response, $matches)) {
             $decoded = json_decode(trim($matches[1]), true);
             if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
                 return $decoded;
             }
         }
 
-        // Try to find JSON object in the text
-        if (preg_match('/\{[\s\S]*\}/', $response, $matches)) {
-            $decoded = json_decode(trim($matches[0]), true);
+        // Fallback: try generic code block (non-greedy, may fail if JSON has ``` inside strings)
+        if (preg_match('/```(?:json)?\s*\n?([\s\S]+?)\n?```/', $response, $matches)) {
+            $decoded = json_decode(trim($matches[1]), true);
             if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
                 return $decoded;
+            }
+        }
+
+        // Last resort: find first { and try to parse until matching }
+        $start = strpos($response, '{');
+        if ($start !== false) {
+            $end = strrpos($response, '}');
+            if ($end !== false && $end > $start) {
+                $json = substr($response, $start, $end - $start + 1);
+                $decoded = json_decode($json, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    return $decoded;
+                }
             }
         }
 
@@ -307,29 +598,49 @@ EOT;
 
     private function validateJsonStructure(array $data): void
     {
-        $requiredKeys = ['overallScore', 'scores', 'summary', 'strengths', 'issues', 'suggestions'];
+        $requiredKeys = ['overallScore', 'scores', 'summary', 'issues', 'suggestions'];
         foreach ($requiredKeys as $key) {
             if (!isset($data[$key])) {
                 throw new \Exception("Missing required key: {$key}");
             }
         }
 
-        $scoreKeys = ['visualHierarchy', 'clarity', 'accessibility', 'consistency', 'layout', 'typography', 'ux'];
-        foreach ($scoreKeys as $key) {
-            if (!isset($data['scores'][$key]) || !is_int($data['scores'][$key])) {
-                throw new \Exception("Invalid or missing score: {$key}");
+        // Scores — at least one score key should exist; values can be int or float
+        if (!is_array($data['scores']) || empty($data['scores'])) {
+            throw new \Exception('Scores must be a non-empty object');
+        }
+        foreach ($data['scores'] as $key => $value) {
+            if (!is_numeric($value)) {
+                throw new \Exception("Score '{$key}' must be numeric");
             }
         }
 
-        foreach ($data['issues'] as $issue) {
+        // Issues — array, each with title + severity + description
+        if (!is_array($data['issues'])) {
+            throw new \Exception('Issues must be an array');
+        }
+        foreach ($data['issues'] ?? [] as $i => $issue) {
             if (empty($issue['title']) || empty($issue['severity']) || empty($issue['description'])) {
-                throw new \Exception('Invalid issue structure');
+                throw new \Exception("Invalid issue at index {$i}");
             }
         }
 
-        foreach ($data['suggestions'] as $suggestion) {
-            if (empty($suggestion['title']) || empty($suggestion['priority']) || empty($suggestion['recommendation'])) {
-                throw new \Exception('Invalid suggestion structure');
+        // Suggestions — array, each with title + priority + recommendation
+        if (!is_array($data['suggestions'])) {
+            throw new \Exception('Suggestions must be an array');
+        }
+        foreach ($data['suggestions'] ?? [] as $i => $s) {
+            if (empty($s['title']) || empty($s['priority']) || empty($s['recommendation'])) {
+                throw new \Exception("Invalid suggestion at index {$i}");
+            }
+        }
+
+        // Annotations — optional but if present must be an array of objects with coordinates
+        if (isset($data['annotations']) && is_array($data['annotations'])) {
+            foreach ($data['annotations'] ?? [] as $i => $ann) {
+                if (!is_array($ann)) {
+                    throw new \Exception("Annotation at index {$i} must be an object");
+                }
             }
         }
     }
