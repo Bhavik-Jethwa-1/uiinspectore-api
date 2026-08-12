@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\AIResponseException;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\Review;
@@ -34,7 +35,7 @@ class ReviewController extends Controller
     {
         $validated = $request->validate([
             'project_id' => 'required|exists:projects,id',
-            'persona' => 'required|in:first-time,non-technical,junior-developer,developer,devops,designer,manager,custom',
+            'persona' => 'required|in:first_time,non_technical,junior_developer,developer,devops,designer,manager,custom',
             'page_goal' => 'required|string|max:500',
         ]);
 
@@ -42,6 +43,7 @@ class ReviewController extends Controller
         $project = $request->user()->projects()->findOrFail($validated['project_id']);
 
         $review = $project->reviews()->create([
+            'user_id' => $request->user()->id,
             'status' => 'pending',
             'persona' => $validated['persona'],
             'page_goal' => $validated['page_goal'],
@@ -96,7 +98,7 @@ class ReviewController extends Controller
         // Update review with screenshot
         $review->update(['screenshot_id' => $screenshot->id]);
 
-        $screenshotUrl = url('/api/storage/' . $path);
+        $screenshotUrl = '/storage/' . $path;
 
         return response()->json([
             'screenshot' => $screenshot,
@@ -135,6 +137,30 @@ class ReviewController extends Controller
             $review->load(['score', 'issues', 'annotations', 'suggestions']);
 
             return response()->json(['review' => $this->formatReviewFull($review)]);
+        } catch (AIResponseException $e) {
+            Log::error('AI API error', [
+                'review_id' => $id,
+                'status' => $e->statusCode,
+                'message' => $e->getMessage(),
+            ]);
+
+            $review->update(['status' => 'failed']);
+
+            if ($e->isRateLimit()) {
+                return response()->json([
+                    'error' => 'AI service is busy (rate limited). Please wait a moment and try again.',
+                ], 429);
+            }
+
+            if ($e->isAuthError()) {
+                return response()->json([
+                    'error' => 'AI API authentication failed. Please check your API key in Admin → Settings.',
+                ], 502);
+            }
+
+            return response()->json([
+                'error' => 'Analysis failed: ' . $e->getMessage(),
+            ], 502);
         } catch (\Exception $e) {
             Log::error('AI analysis failed', [
                 'review_id' => $id,
@@ -158,7 +184,7 @@ class ReviewController extends Controller
             'status' => $review->status,
             'persona' => $review->persona,
             'page_goal' => $review->page_goal,
-            'screenshot_url' => $review->screenshot ? url('/api/storage/' . $review->screenshot->path) : null,
+            'screenshot_url' => $review->screenshot ? '/storage/' . $review->screenshot->path : null,
             'created_at' => $review->created_at,
             'updated_at' => $review->updated_at,
         ];
@@ -173,7 +199,7 @@ class ReviewController extends Controller
             'status' => $review->status,
             'persona' => $review->persona,
             'page_goal' => $review->page_goal,
-            'screenshot_url' => $review->screenshot ? url('/api/storage/' . $review->screenshot->path) : null,
+            'screenshot_url' => $review->screenshot ? '/storage/' . $review->screenshot->path : null,
             'created_at' => $review->created_at,
             'updated_at' => $review->updated_at,
             'scores' => $review->score ? [

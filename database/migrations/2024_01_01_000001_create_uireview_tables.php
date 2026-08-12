@@ -43,7 +43,7 @@ return new class extends Migration
             $table->foreignId('project_id')->constrained()->onDelete('cascade');
             $table->foreignId('screenshot_id')->nullable();
             $table->enum('status', ['pending', 'analyzing', 'completed', 'failed'])->default('pending');
-            $table->enum('persona', ['first-time', 'non-technical', 'junior-developer', 'developer', 'devops', 'designer', 'manager', 'custom']);
+            $table->enum('persona', ['first_time', 'non_technical', 'junior_developer', 'developer', 'devops', 'designer', 'manager', 'custom']);
             $table->string('page_goal');
             $table->text('ai_response')->nullable();
             $table->timestamps();

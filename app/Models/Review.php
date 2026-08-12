@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class Review extends Model
 {
     protected $fillable = [
-        'project_id', 'screenshot_id', 'status', 'persona', 'page_goal', 'ai_response'
+        'user_id', 'project_id', 'screenshot_id', 'status', 'persona', 'page_goal', 'ai_response'
     ];
 
     protected $casts = [

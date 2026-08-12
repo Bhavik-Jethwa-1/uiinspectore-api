@@ -3,8 +3,10 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\ReviewController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\AdminUserController;
 use App\Http\Controllers\Api\AdminSettingsController;
+use App\Http\Controllers\Api\AdminDashboardController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
@@ -17,6 +19,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'user']);
     Route::put('/user', [AuthController::class, 'update']);
+
+    // Dashboard (aggregated)
+    Route::get('/dashboard', [DashboardController::class, 'index']);
 
     // Projects
     Route::get('/projects', [ProjectController::class, 'index']);
@@ -34,6 +39,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Admin routes
     Route::middleware('admin')->group(function () {
+        Route::get('/admin/dashboard', [AdminDashboardController::class, 'index']);
+        Route::get('/admin/reviews', [AdminDashboardController::class, 'reviews']);
+        Route::get('/admin/projects', [AdminDashboardController::class, 'projects']);
         Route::get('/admin/users', [AdminUserController::class, 'index']);
         Route::get('/admin/users/{id}', [AdminUserController::class, 'show']);
         Route::patch('/admin/users/{id}', [AdminUserController::class, 'update']);

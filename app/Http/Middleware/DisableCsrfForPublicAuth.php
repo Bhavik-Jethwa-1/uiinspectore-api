@@ -12,8 +12,13 @@ class DisableCsrfForPublicAuth extends Middleware
      *
      * @var array<int, string>
      */
+    /**
+     * The URIs that should be excluded from CSRF verification.
+     *
+     * @var array<int, string>
+     */
     protected $except = [
-        'api/register',
-        'api/login',
+        'api/*',
+        'admin/*',
     ];
 }

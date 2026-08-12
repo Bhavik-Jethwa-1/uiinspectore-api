@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\AIResponseException;
 use App\Models\Review;
 use App\Models\ReviewAnnotation;
 use App\Models\ReviewIssue;
@@ -43,9 +44,9 @@ class AIReviewService
     private function formatPersona(string $persona): string
     {
         return match ($persona) {
-            'first-time' => 'First-time user',
-            'non-technical' => 'Non-technical user',
-            'junior-developer' => 'Junior developer',
+            'first_time' => 'First-time user',
+            'non_technical' => 'Non-technical user',
+            'junior_developer' => 'Junior developer',
             'developer' => 'Experienced developer',
             'devops' => 'DevOps engineer',
             'designer' => 'Product designer',
@@ -189,8 +190,18 @@ EOT;
         ]);
 
         if ($response->failed()) {
-            Log::error('OpenAI API error', ['status' => $response->status(), 'body' => $response->body()]);
-            throw new \Exception('AI API request failed: ' . $response->status());
+            $status = $response->status();
+            $body = $response->body();
+            Log::error('OpenAI API error', ['status' => $status, 'body' => $body]);
+
+            if ($status === 429) {
+                throw new AIResponseException(429, $body);
+            }
+            if (in_array($status, [401, 403])) {
+                throw new AIResponseException($status, $body);
+            }
+
+            throw new AIResponseException($status, $body);
         }
 
         $body = $response->json();
@@ -233,8 +244,18 @@ EOT;
         ]);
 
         if ($response->failed()) {
-            Log::error('Anthropic API error', ['status' => $response->status(), 'body' => $response->body()]);
-            throw new \Exception('AI API request failed: ' . $response->status());
+            $status = $response->status();
+            $body = $response->body();
+            Log::error('Anthropic API error', ['status' => $status, 'body' => $body]);
+
+            if ($status === 429) {
+                throw new AIResponseException(429, $body);
+            }
+            if (in_array($status, [401, 403])) {
+                throw new AIResponseException($status, $body);
+            }
+
+            throw new AIResponseException($status, $body);
         }
 
         $body = $response->json();
