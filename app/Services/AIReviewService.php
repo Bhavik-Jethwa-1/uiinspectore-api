@@ -18,27 +18,153 @@ class AIReviewService
     private string $provider;
     private string $model;
 
+    /** @var array Default fallback chain for vision-capable providers */
+    private const FALLBACK_CHAIN = [
+        // gemini-3.5-flash: primary working provider with vision + large free tier
+        ['provider' => 'gemini',  'retries' => 1],
+        // Groq has NO vision models (all decommissioned) — skip by default
+        // ['provider' => 'groq', 'retries' => 1],
+        // xAI has no credits on this account — skip by default
+        // ['provider' => 'xai', 'retries' => 1],
+        // OpenAI: available but no credits (keep commented unless credits added)
+        // ['provider' => 'openai', 'retries' => 1],
+    ];
+
+    /**
+     * Override the fallback chain via AI_FALLBACK_PROVIDERS env var.
+     * Format: comma-separated provider names, e.g. "gemini,openai,xai"
+     * Providers without valid API keys or vision support will be skipped at runtime.
+     */
+
     public function __construct()
     {
-        $this->provider = config('ai.provider', 'openai');
-        $this->model = config('ai.openai.model', 'gpt-4o');
+        $this->provider = config('ai.provider', 'gemini');
+        $this->model    = $this->getModelForProvider($this->provider);
+    }
+
+    /**
+     * Get the configured model name for a given provider.
+     */
+    private function getModelForProvider(string $provider): string
+    {
+        return match ($provider) {
+            'openai'    => config('ai.openai.model',    'gpt-4o'),
+            'anthropic' => config('ai.anthropic.model', 'claude-3-5-sonnet-20241022'),
+            'ollama'    => config('ai.ollama.model',    'llava'),
+            'cloudflare'=> config('ai.cloudflare.model','@cf/meta/llama-3.2-11b-vision-instruct'),
+            'groq'      => config('ai.groq.model',      'llama-3.2-11b-vision-preview'),
+            'gemini'    => config('ai.gemini.model',    'gemini-2.0-flash'),
+            'xai'       => config('ai.xai.model',       'grok-2-vision-1212'),
+            default     => 'gpt-4o',
+        };
     }
 
     public function analyze(Review $review, Screenshot $screenshot): array
     {
-        $persona = $this->formatPersona($review->persona);
+        $persona  = $this->formatPersona($review->persona);
         $pageGoal = $review->page_goal;
 
         // Read the screenshot file and encode as base64
-        $imagePath = Storage::disk('local')->path($screenshot->path);
+        $imagePath  = Storage::disk('local')->path($screenshot->path);
         $imageBase64 = base64_encode(file_get_contents($imagePath));
-        $mimeType = $screenshot->mime_type;
+        $mimeType   = $screenshot->mime_type;
 
         $prompt = $this->buildPrompt($persona, $pageGoal);
 
-        $response = $this->callAI($prompt, $imageBase64, $mimeType);
+        // Try primary provider first, then fall back through the chain
+        $response = $this->callAIWithFallback($prompt, $imageBase64, $mimeType);
 
         return $this->parseAndValidateResponse($response);
+    }
+
+    /**
+     * Attempt AI call with automatic fallback across configured providers.
+     * Tries primary provider, then each fallback provider with its retry count.
+     */
+    private function callAIWithFallback(string $prompt, string $imageBase64, string $mimeType): string
+    {
+        $attempted = [];
+
+        // Build ordered chain: primary first, then configured fallbacks
+        $chain = $this->buildFallbackChain();
+
+        foreach ($chain as $attempt) {
+            $provider = $attempt['provider'];
+            $retries  = $attempt['retries'];
+            $model    = $this->getModelForProvider($provider);
+
+            for ($i = 0; $i <= $retries; $i++) {
+                try {
+                    $response = $this->callAI($prompt, $imageBase64, $mimeType, $provider, $model);
+                    Log::info("AI call succeeded", ['provider' => $provider, 'model' => $model]);
+                    return $response;
+                } catch (AIResponseException $e) {
+                    // Auth errors are fatal — never retry or fallback
+                    if ($e->isAuthError()) {
+                        Log::error("AI auth error (not retrying or falling back)", [
+                            'provider' => $provider,
+                            'status'   => $e->statusCode,
+                        ]);
+                        // Re-throw auth errors immediately so user sees the error
+                        throw $e;
+                    }
+
+                    $attemptKey = "{$provider}:{$i}";
+                    $already = in_array($attemptKey, $attempted);
+                    $attempted[] = $attemptKey;
+
+                    Log::warning("AI call attempt failed, " . ($i < $retries ? "retrying" : "falling back"), [
+                        'provider'  => $provider,
+                        'model'    => $model,
+                        'attempt'  => $i + 1,
+                        'max'      => $retries + 1,
+                        'status'   => $e->statusCode,
+                        'message'  => $e->getMessage(),
+                    ]);
+                } catch (\Exception $e) {
+                    $attemptKey = "{$provider}:{$i}";
+                    $attempted[] = $attemptKey;
+                    Log::warning("AI call threw exception, " . ($i < $retries ? "retrying" : "falling back"), [
+                        'provider' => $provider,
+                        'model'   => $model,
+                        'attempt' => $i + 1,
+                        'max'     => $retries + 1,
+                        'error'   => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+
+        throw new \Exception("All AI providers failed after retries. Tried: " . implode(', ', array_unique($attempted)));
+    }
+
+    /**
+     * Build the ordered fallback chain: primary provider first, then configured fallbacks.
+     * Providers without valid API keys or vision support are silently skipped.
+     */
+    private function buildFallbackChain(): array
+    {
+        $primary = ['provider' => $this->provider, 'retries' => 0];
+        $chain   = [$primary];
+
+        // Allow override via AI_FALLBACK_PROVIDERS env var (comma-separated list)
+        $fbEnv = env('AI_FALLBACK_PROVIDERS', '');
+        if (!empty($fbEnv)) {
+            foreach (array_filter(array_map('trim', explode(',', $fbEnv))) as $fbProvider) {
+                if ($fbProvider !== $this->provider) {
+                    $chain[] = ['provider' => $fbProvider, 'retries' => 1];
+                }
+            }
+        } else {
+            // Use built-in default chain (excludes known-broken providers)
+            foreach (self::FALLBACK_CHAIN as $fb) {
+                if ($fb['provider'] !== $this->provider) {
+                    $chain[] = $fb;
+                }
+            }
+        }
+
+        return $chain;
     }
 
     private function formatPersona(string $persona): string
@@ -58,47 +184,84 @@ class AIReviewService
 
     private function buildPrompt(string $persona, string $pageGoal): string
     {
-        $prompt = 'You are an expert senior UI/UX reviewer. Analyze this screenshot for a ' . $persona . '. '
-            . 'Page goal: ' . $pageGoal . '. '
-            . 'IMPORTANT: Respond with ONLY this exact JSON structure - no text outside it: ';
-        $prompt .= '{"overallScore":75,"scores":{"visualHierarchy":75,"clarity":70,"accessibility":65,"consistency":70,"layout":72,"typography":68,"ux":70},';
-        $prompt .= '"summary":"The UI is clean with clear navigation.","strengths":["Clean layout"],';
-        $prompt .= '"issues":[{"title":"Small text","severity":"medium","description":"Text is hard to read","recommendation":"Increase font size","x":50,"y":50,"width":20,"height":20}],';
-        $prompt .= '"suggestions":[{"title":"Improve contrast","priority":"medium","recommendation":"Use darker text"}]}';
-        return $prompt;
+        return <<<PROMPT
+You are an expert senior UI/UX reviewer. Analyze the screenshot for a {$persona}.
+Page goal: {$pageGoal}
+
+Respond with ONLY a valid JSON object — no markdown, no code blocks, no text outside it.
+
+Required JSON structure:
+{
+  "overallScore": 0-100,
+  "summary": "2-3 sentence summary of the UI",
+  "strengths": ["strength 1", "strength 2"],
+  "scores": {
+    "visualHierarchy": 0-100,
+    "clarity": 0-100,
+    "accessibility": 0-100,
+    "consistency": 0-100,
+    "layout": 0-100,
+    "typography": 0-100,
+    "ux": 0-100
+  },
+  "issues": [
+    {
+      "title": "Issue title",
+      "severity": "critical|high|medium|low",
+      "description": "What the problem is",
+      "recommendation": "How to fix it",
+      "x": 0-100,
+      "y": 0-100,
+      "width": 0-100,
+      "height": 0-100
+    }
+  ],
+  "suggestions": [
+    {
+      "title": "Suggestion title",
+      "priority": "critical|high|medium|low",
+      "recommendation": "What to do",
+      "expectedImpact": "Why it matters"
+    }
+  ]
+}
+
+Requirements:
+- overallScore must be 0-100 (integer)
+- All scores must be 0-100 (integers)
+- issues and suggestions can be empty arrays if nothing found
+- x, y, width, height are percentages (0-100) of the screenshot dimensions
+- Be strict: respond with ONLY the JSON object, nothing else
+PROMPT;
     }
 
-    private function callAI(string $prompt, string $imageBase64, string $mimeType): string
+    /**
+     * Dispatch to the correct provider-specific method.
+     * Provider and model are passed explicitly so the fallback chain can override them.
+     */
+    private function callAI(string $prompt, string $imageBase64, string $mimeType, string $provider, string $model): string
     {
-        if ($this->provider === 'openai') {
-            return $this->callOpenAI($prompt, $imageBase64, $mimeType);
-        }
+        // Temporarily set instance vars so individual methods still work if they read them
+        $previousProvider = $this->provider;
+        $previousModel    = $this->model;
+        $this->provider   = $provider;
+        $this->model      = $model;
 
-        if ($this->provider === 'anthropic') {
-            return $this->callAnthropic($prompt, $imageBase64, $mimeType);
+        try {
+            return match ($provider) {
+                'openai'    => $this->callOpenAI($prompt, $imageBase64, $mimeType),
+                'anthropic' => $this->callAnthropic($prompt, $imageBase64, $mimeType),
+                'ollama'    => $this->callOllama($prompt, $imageBase64, $mimeType),
+                'groq'      => $this->callGroq($prompt, $imageBase64, $mimeType),
+                'gemini'    => $this->callGemini($prompt, $imageBase64, $mimeType),
+                'cloudflare'=> $this->callCloudflare($prompt, $imageBase64, $mimeType),
+                'xai'       => $this->callXAI($prompt, $imageBase64, $mimeType),
+                default     => throw new \Exception("AI provider '{$provider}' not supported"),
+            };
+        } finally {
+            $this->provider = $previousProvider;
+            $this->model    = $previousModel;
         }
-
-        if ($this->provider === 'ollama') {
-            return $this->callOllama($prompt, $imageBase64, $mimeType);
-        }
-
-        if ($this->provider === 'groq') {
-            return $this->callGroq($prompt, $imageBase64, $mimeType);
-        }
-
-        if ($this->provider === 'gemini') {
-            return $this->callGemini($prompt, $imageBase64, $mimeType);
-        }
-
-        if ($this->provider === 'cloudflare') {
-            return $this->callCloudflare($prompt, $imageBase64, $mimeType);
-        }
-
-        if ($this->provider === 'xai') {
-            return $this->callXAI($prompt, $imageBase64, $mimeType);
-        }
-
-        throw new \Exception("AI provider '{$this->provider}' not supported");
     }
 
     private function getOpenAIKey(): string
@@ -165,7 +328,6 @@ class AIReviewService
     private function callAnthropic(string $prompt, string $imageBase64, string $mimeType): string
     {
         $apiKey = config('ai.anthropic.api_key');
-        $model = config('ai.anthropic.model', 'claude-3-5-sonnet-20241022');
 
         if (empty($apiKey)) {
             throw new \Exception('Anthropic API key not configured');
@@ -176,7 +338,7 @@ class AIReviewService
             'anthropic-version' => '2023-06-01',
             'Content-Type' => 'application/json',
         ])->timeout(120)->post('https://api.anthropic.com/v1/messages', [
-            'model' => $model,
+            'model' => $this->model,
             'max_tokens' => 4000,
             'messages' => [
                 [
@@ -219,12 +381,11 @@ class AIReviewService
     private function callOllama(string $prompt, string $imageBase64, string $mimeType): string
     {
         $baseUrl = config('ai.ollama.base_url', 'http://127.0.0.1:11434');
-        $model = config('ai.ollama.model', 'llava');
 
         $response = Http::timeout(180)
             ->withHeaders(['Content-Type' => 'application/json'])
             ->post("{$baseUrl}/api/generate", [
-                'model' => $model,
+                'model' => $this->model,
                 'prompt' => $prompt,
                 'images' => [$imageBase64],
                 'stream' => false,
@@ -244,7 +405,6 @@ class AIReviewService
     private function callGroq(string $prompt, string $imageBase64, string $mimeType): string
     {
         $apiKey = config('ai.groq.api_key');
-        $model = config('ai.groq.model', 'llama-3.2-11b-vision-preview');
 
         if (empty($apiKey)) {
             throw new \Exception('Groq API key not configured. Add AI_GROQ_API_KEY to your .env file.');
@@ -256,7 +416,7 @@ class AIReviewService
             'Authorization' => 'Bearer ' . $apiKey,
             'Content-Type' => 'application/json',
         ])->timeout(120)->post('https://api.groq.com/v1/chat/completions', [
-            'model' => $model,
+            'model' => $this->model,
             'messages' => [
                 [
                     'role' => 'user',
@@ -292,7 +452,6 @@ class AIReviewService
     private function callGemini(string $prompt, string $imageBase64, string $mimeType): string
     {
         $apiKey = config('ai.gemini.api_key');
-        $model = config('ai.gemini.model', 'gemini-1.5-flash');
 
         if (empty($apiKey)) {
             throw new \Exception('Gemini API key not configured. Add AI_GEMINI_API_KEY to your .env file.');
@@ -308,7 +467,7 @@ class AIReviewService
         $response = Http::timeout(120)
             ->withHeaders(['Content-Type' => 'application/json'])
             ->post(
-                "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}",
+                "https://generativelanguage.googleapis.com/v1beta/models/{$this->model}:generateContent?key={$apiKey}",
                 [
                     'contents' => [
                         [
@@ -362,7 +521,6 @@ class AIReviewService
     {
         $accountId = config('ai.cloudflare.account_id');
         $apiToken = config('ai.cloudflare.api_token');
-        $model = config('ai.cloudflare.model', '@cf/meta/llama-3.2-11b-vision-instruct');
 
         if (empty($accountId) || empty($apiToken)) {
             throw new \Exception('Cloudflare AI not configured. Set AI_CF_ACCOUNT_ID and AI_CF_API_TOKEN in .env');
@@ -381,7 +539,7 @@ class AIReviewService
                 'Content-Type' => 'application/json',
             ])
             ->post(
-                "https://api.cloudflare.com/client/v4/accounts/{$accountId}/ai/run/{$model}",
+                "https://api.cloudflare.com/client/v4/accounts/{$accountId}/ai/run/{$this->model}",
                 [
                     'messages' => [
                         [
@@ -422,7 +580,6 @@ class AIReviewService
     private function callXAI(string $prompt, string $imageBase64, string $mimeType): string
     {
         $apiKey = config('ai.xai.api_key');
-        $model = config('ai.xai.model', 'grok-2-vision-1212');
 
         if (empty($apiKey)) {
             throw new \Exception('xAI API key not configured. Add XAI_API_KEY to your .env file.');
@@ -436,7 +593,7 @@ class AIReviewService
                 'Content-Type' => 'application/json',
             ])
             ->post('https://api.x.ai/v1/chat/completions', [
-                'model' => $model,
+                'model' => $this->model,
                 'messages' => [
                     [
                         'role' => 'user',
@@ -732,20 +889,32 @@ class AIReviewService
 
     public function saveReviewResults(Review $review, array $aiData): void
     {
-        // Save scores
-        $scores = $aiData['scores'];
+        // Parse and normalize scores — AI may return them as ints or floats
+        $scores = $aiData['scores'] ?? [];
+        foreach ($scores as $k => $v) {
+            $scores[$k] = is_numeric($v) ? (int) $v : null;
+        }
+
+        // Ensure each score category has a value (default to 0 if missing)
+        $scoreFields = ['visualHierarchy', 'clarity', 'accessibility', 'consistency', 'layout', 'typography', 'ux'];
+        foreach ($scoreFields as $field) {
+            if (!isset($scores[$field]) || $scores[$field] === null) {
+                $scores[$field] = 0;
+            }
+        }
+
         ReviewScore::create([
-            'review_id' => $review->id,
-            'visual_hierarchy' => $scores['visualHierarchy'] ?? null,
-            'clarity' => $scores['clarity'] ?? null,
-            'accessibility' => $scores['accessibility'] ?? null,
-            'consistency' => $scores['consistency'] ?? null,
-            'layout' => $scores['layout'] ?? null,
-            'typography' => $scores['typography'] ?? null,
-            'ux' => $scores['ux'] ?? null,
-            'overall' => $aiData['overallScore'] ?? null,
-            'summary' => $aiData['summary'] ?? null,
-            'strengths' => $aiData['strengths'] ?? [],
+            'review_id'         => $review->id,
+            'visual_hierarchy'  => $scores['visualHierarchy'],
+            'clarity'           => $scores['clarity'],
+            'accessibility'     => $scores['accessibility'],
+            'consistency'       => $scores['consistency'],
+            'layout'            => $scores['layout'],
+            'typography'        => $scores['typography'],
+            'ux'                => $scores['ux'],
+            'overall'           => isset($aiData['overallScore']) && is_numeric($aiData['overallScore']) ? (int) $aiData['overallScore'] : 0,
+            'summary'           => $aiData['summary'] ?? '',
+            'strengths'         => $aiData['strengths'] ?? [],
         ]);
 
         // Save issues and annotations

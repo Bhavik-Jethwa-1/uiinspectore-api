@@ -8,6 +8,7 @@ use App\Models\Project;
 use App\Models\Review;
 use App\Models\Screenshot;
 use App\Services\AIReviewService;
+use App\Services\ActivityLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -48,6 +49,8 @@ class ReviewController extends Controller
             'persona' => $validated['persona'],
             'page_goal' => $validated['page_goal'],
         ]);
+
+        ActivityLogger::log($request->user(), 'review_created', "Created review for '{$project->name}'", ['review_id' => $review->id, 'project_id' => $project->id]);
 
         return response()->json(['review' => $this->formatReview($review)], 201);
     }
@@ -104,6 +107,8 @@ class ReviewController extends Controller
         // Update review with screenshot
         $review->update(['screenshot_id' => $screenshot->id]);
 
+        ActivityLogger::log($request->user(), 'screenshot_uploaded', "Uploaded screenshot for review #{$review->id}", ['review_id' => $review->id]);
+
         $screenshotUrl = '/storage/' . $path;
 
         return response()->json([
@@ -141,6 +146,8 @@ class ReviewController extends Controller
 
             // Reload with relations
             $review->load(['score', 'issues', 'annotations', 'suggestions']);
+
+            ActivityLogger::log($request->user(), 'review_completed', "Review completed for '{$review->project->name}'", ['review_id' => $review->id, 'project_id' => $review->project_id]);
 
             return response()->json(['review' => $this->formatReviewFull($review)]);
         } catch (AIResponseException $e) {

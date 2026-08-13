@@ -31,11 +31,11 @@ return [
 
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY', ''),
-        'model' => env('AI_GEMINI_MODEL', 'gemini-2.5-flash'),
+        'model' => env('AI_GEMINI_MODEL', 'gemini-3.5-flash'),
     ],
 
     'xai' => [
         'api_key' => env('XAI_API_KEY', ''),
-        'model' => env('AI_XAI_MODEL', 'grok-2-vision-1212'),
+        'model' => env('AI_XAI_MODEL', 'grok-2-vision'),
     ],
 ];

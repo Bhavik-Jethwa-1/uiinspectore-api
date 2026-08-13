@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\ActivityLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -27,6 +28,8 @@ class AuthController extends Controller
 
         $token = $user->createToken('auth-token')->plainTextToken;
 
+        ActivityLogger::log($user, 'registered', "Registered as {$user->name}");
+
         return response()->json([
             'user' => $user,
             'token' => $token,
@@ -48,7 +51,15 @@ class AuthController extends Controller
             ]);
         }
 
+        if (!$user->is_active) {
+            throw ValidationException::withMessages([
+                'email' => ['This account has been suspended. Contact your administrator.'],
+            ]);
+        }
+
         $token = $user->createToken('auth-token')->plainTextToken;
+
+        ActivityLogger::log($user, 'login', "Logged in");
 
         return response()->json([
             'user' => $user,

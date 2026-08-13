@@ -41,4 +41,14 @@ class User extends Authenticatable
     {
         return $this->hasManyThrough(Review::class, Project::class);
     }
+
+    public function activityLogs()
+    {
+        return $this->hasMany(ActivityLog::class)->orderByDesc('created_at');
+    }
+
+    public function settings()
+    {
+        return $this->hasMany(UserSetting::class);
+    }
 }

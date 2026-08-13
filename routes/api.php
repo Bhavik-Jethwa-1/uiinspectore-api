@@ -45,6 +45,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/admin/users', [AdminUserController::class, 'index']);
         Route::get('/admin/users/{id}', [AdminUserController::class, 'show']);
         Route::patch('/admin/users/{id}', [AdminUserController::class, 'update']);
+        Route::put('/admin/users/{id}/settings', [AdminUserController::class, 'updateSettings']);
+        Route::delete('/admin/users/{id}/settings', [AdminUserController::class, 'deleteSetting']);
+        Route::post('/admin/users/{id}/reset-password', [AdminUserController::class, 'resetPassword']);
+        Route::post('/admin/users/{id}/suspend', [AdminUserController::class, 'suspendUser']);
+        Route::post('/admin/users/{id}/activate', [AdminUserController::class, 'activateUser']);
+        Route::post('/admin/users/{id}/reset-preferences', [AdminUserController::class, 'resetPreferences']);
+        Route::get('/admin/settings/meta', [AdminUserController::class, 'settingsMeta']);
         Route::delete('/admin/users/{id}', [AdminUserController::class, 'destroy']);
         Route::get('/admin/settings', [AdminSettingsController::class, 'show']);
         Route::post('/admin/settings', [AdminSettingsController::class, 'store']);
