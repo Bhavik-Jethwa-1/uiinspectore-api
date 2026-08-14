@@ -889,6 +889,10 @@ PROMPT;
 
     public function saveReviewResults(Review $review, array $aiData): void
     {
+        // Clean up any existing review data before saving new results
+        // This ensures retry works properly without duplicate records
+        $this->cleanupReviewResults($review->id);
+
         // Parse and normalize scores — AI may return them as ints or floats
         $scores = $aiData['scores'] ?? [];
         foreach ($scores as $k => $v) {
@@ -957,5 +961,24 @@ PROMPT;
             'status' => 'completed',
             'ai_response' => json_encode($aiData),
         ]);
+    }
+
+    /**
+     * Clean up existing review results to allow retry.
+     * Deletes scores, issues, annotations, and suggestions for the given review.
+     */
+    public function cleanupReviewResults(int $reviewId): void
+    {
+        // Delete annotations first (foreign key constraint)
+        ReviewAnnotation::where('review_id', $reviewId)->delete();
+
+        // Delete issues (cascades from reviews table but explicit is clearer)
+        ReviewIssue::where('review_id', $reviewId)->delete();
+
+        // Delete suggestions
+        ReviewSuggestion::where('review_id', $reviewId)->delete();
+
+        // Delete scores
+        ReviewScore::where('review_id', $reviewId)->delete();
     }
 }

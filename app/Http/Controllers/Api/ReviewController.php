@@ -188,6 +188,104 @@ class ReviewController extends Controller
         }
     }
 
+    /**
+     * Retry a failed review by re-running the AI analysis with the original screenshot.
+     * This endpoint is specifically designed for retrying failed reviews.
+     */
+    public function retry(Request $request, int $id): JsonResponse
+    {
+        $review = $request->user()
+            ->reviews()
+            ->with('screenshot')
+            ->findOrFail($id);
+
+        // Check if screenshot exists - cannot retry without it
+        if (!$review->screenshot_id) {
+            return response()->json([
+                'error' => 'Unable to retry this review because the original screenshot is no longer available.',
+                'code' => 'SCREENSHOT_MISSING'
+            ], 400);
+        }
+
+        $screenshot = $review->screenshot;
+
+        // Verify the screenshot file still exists on disk
+        if (!Storage::disk('local')->exists($screenshot->path)) {
+            return response()->json([
+                'error' => 'Unable to retry this review because the original screenshot file is no longer accessible.',
+                'code' => 'SCREENSHOT_FILE_MISSING'
+            ], 400);
+        }
+
+        // Only allow retry for failed or pending reviews
+        if ($review->status === 'completed') {
+            return response()->json([
+                'error' => 'This review has already been completed. Create a new review to analyze again.',
+                'code' => 'ALREADY_COMPLETED'
+            ], 400);
+        }
+
+        // Update status to analyzing/processing
+        $review->update(['status' => 'analyzing']);
+
+        try {
+            // Call AI service - this sends the original screenshot for a fresh analysis
+            $aiData = $this->aiService->analyze($review, $screenshot);
+
+            // Save results (this also cleans up any old failed results)
+            $this->aiService->saveReviewResults($review, $aiData);
+
+            // Reload with relations
+            $review->load(['score', 'issues', 'annotations', 'suggestions']);
+
+            ActivityLogger::log($request->user(), 'review_retried', "Retried review #{$review->id} for '{$review->project->name}'", ['review_id' => $review->id]);
+
+            return response()->json([
+                'review' => $this->formatReviewFull($review),
+                'retried' => true
+            ]);
+        } catch (AIResponseException $e) {
+            Log::error('AI retry API error', [
+                'review_id' => $id,
+                'status' => $e->statusCode,
+                'message' => $e->getMessage(),
+            ]);
+
+            $review->update(['status' => 'failed']);
+
+            if ($e->isRateLimit()) {
+                return response()->json([
+                    'error' => 'AI service is busy (rate limited). Please wait a moment and try again.',
+                    'code' => 'RATE_LIMITED'
+                ], 429);
+            }
+
+            if ($e->isAuthError()) {
+                return response()->json([
+                    'error' => 'AI API authentication failed. Please check your API key in Admin → Settings.',
+                    'code' => 'AUTH_ERROR'
+                ], 502);
+            }
+
+            return response()->json([
+                'error' => 'Analysis failed: ' . $e->getMessage(),
+                'code' => 'AI_ERROR'
+            ], 502);
+        } catch (\Exception $e) {
+            Log::error('AI retry analysis failed', [
+                'review_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+
+            $review->update(['status' => 'failed']);
+
+            return response()->json([
+                'error' => 'Analysis failed: ' . $e->getMessage(),
+                'code' => 'UNKNOWN_ERROR'
+            ], 500);
+        }
+    }
+
     private function formatReview(Review $review): array
     {
         return [

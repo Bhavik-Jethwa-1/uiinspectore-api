@@ -36,6 +36,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/reviews/{id}', [ReviewController::class, 'destroy']);
     Route::post('/reviews/{id}/screenshot', [ReviewController::class, 'uploadScreenshot']);
     Route::post('/reviews/{id}/analyze', [ReviewController::class, 'analyze']);
+    Route::post('/reviews/{id}/retry', [ReviewController::class, 'retry']);
 
     // Admin routes
     Route::middleware('admin')->group(function () {
