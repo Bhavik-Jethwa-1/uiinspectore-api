@@ -61,7 +61,13 @@ class DashboardController extends Controller
             ->select(['reviews.id', 'reviews.project_id', 'reviews.persona', 'reviews.page_goal', 'reviews.status', 'reviews.created_at', 'reviews.updated_at', 'projects.name as project_name'])
             ->paginate($reviewsPerPage, ['reviews.id', 'reviews.project_id', 'reviews.persona', 'reviews.page_goal', 'reviews.status', 'reviews.created_at', 'reviews.updated_at', 'projects.name as project_name'], 'reviews_page', $reviewsPage);
 
-        $reviews = $reviewsPaginator->items();
+        // Load scores for paginated items
+        $reviewIds = collect($reviewsPaginator->items())->pluck('id');
+        $scores = \App\Models\ReviewScore::whereIn('review_id', $reviewIds)->get()->keyBy('review_id');
+        $reviews = collect($reviewsPaginator->items())->map(function ($review) use ($scores) {
+            $review->scores = $scores->has($review->id) ? ['overall' => $scores[$review->id]->overall] : null;
+            return $review;
+        });
 
         return response()->json([
             'user' => [

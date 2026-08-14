@@ -43,6 +43,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/admin/dashboard', [AdminDashboardController::class, 'index']);
         Route::get('/admin/reviews', [AdminDashboardController::class, 'reviews']);
         Route::get('/admin/projects', [AdminDashboardController::class, 'projects']);
+        Route::delete('/admin/projects/{id}', [ProjectController::class, 'destroy']);
         Route::get('/admin/users', [AdminUserController::class, 'index']);
         Route::get('/admin/users/{id}', [AdminUserController::class, 'show']);
         Route::patch('/admin/users/{id}', [AdminUserController::class, 'update']);
