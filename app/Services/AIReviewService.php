@@ -296,6 +296,7 @@ REQUIREMENTS:
 - Every suggestion MUST have: title, priority, category, problem, recommendation, expectedImpact
 - Be specific and detailed — vague issues and suggestions are not helpful
 - Respond with ONLY the JSON object, nothing else
+  - If an issue has no specific location (e.g., font is small everywhere): provide a representative region — do NOT return null or omitted coordinates
 PROMPT;
     }
 
@@ -961,11 +962,14 @@ PROMPT;
             if (!in_array($category, $validCategories)) {
                 throw new \Exception("Issue at index {$i} ('{$issue['title']}') has invalid category '{$category}'. Must be one of: " . implode(', ', $validCategories));
             }
-            // Validate coordinates are numeric and in valid range
+            // Validate coordinates — null is acceptable (will use defaults), but non-null must be numeric and 0-100
             foreach (['x', 'y', 'width', 'height'] as $coord) {
                 $val = $issue[$coord] ?? null;
-                if (!is_numeric($val)) {
+                if ($val !== null && !is_numeric($val)) {
                     throw new \Exception("Issue at index {$i} ('{$issue['title']}') has non-numeric coordinate {$coord}: " . gettype($val));
+                }
+                if ($val !== null && (floatval($val) < 0 || floatval($val) > 100)) {
+                    throw new \Exception("Issue at index {$i} ('{$issue['title']}') has {$coord}={$val} — must be between 0 and 100");
                 }
                 if ($val < 0 || $val > 100) {
                     throw new \Exception("Issue at index {$i} ('{$issue['title']}') has {$coord}={$val} — must be between 0 and 100");
