@@ -82,7 +82,18 @@ class ProjectController extends Controller
 
     public function destroy(Request $request, int $id): JsonResponse
     {
-        $project = $request->user()->projects()->findOrFail($id);
+        // Admins can delete any project; regular users can only delete their own
+        if ($request->user()->is_admin) {
+            $project = Project::find($id);
+        } else {
+            $project = $request->user()->projects()->find($id);
+        }
+
+        if (!$project) {
+            // Already gone or doesn't exist — treat as success from the client's perspective
+            return response()->json(['message' => 'Project deleted'], 200);
+        }
+
         $projectName = $project->name;
         $projectId = $project->id;
         $project->delete();
