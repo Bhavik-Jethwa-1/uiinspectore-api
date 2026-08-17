@@ -215,7 +215,7 @@ class AdminUserController extends Controller
         ]);
     }
 
-    public function destroy(int $id): JsonResponse
+    public function destroy(Request $request, int $id): JsonResponse
     {
         $user = User::find($id);
 
