@@ -152,12 +152,22 @@ class AdminDashboardController extends Controller
     public function projects(Request $request): JsonResponse
     {
         $query = Project::withCount('reviews')
-            ->with(['user:id,name,email'])
-            ->orderBy('created_at', 'desc');
+            ->with(['user:id,name,email']);
 
         if ($request->has('search') && $request->search) {
             $query->where('name', 'like', '%' . $request->search . '%');
         }
+
+        // Sort
+        $sort = $request->sort ?? 'newest';
+        match ($sort) {
+            'oldest' => $query->orderBy('created_at', 'asc'),
+            'name_asc' => $query->orderBy('name', 'asc'),
+            'name_desc' => $query->orderBy('name', 'desc'),
+            'reviews_desc' => $query->orderBy('reviews_count', 'desc'),
+            'reviews_asc' => $query->orderBy('reviews_count', 'asc'),
+            default => $query->orderBy('created_at', 'desc'),
+        };
 
         $perPage = min((int) ($request->per_page ?: 20), 100);
         $paginator = $query->paginate($perPage);
@@ -177,6 +187,61 @@ class AdminDashboardController extends Controller
             'per_page' => $paginator->perPage(),
             'current_page' => $paginator->currentPage(),
             'last_page' => $paginator->lastPage(),
+        ]);
+    }
+
+    /**
+     * GET /api/admin/projects/{id}
+     * Returns a single project with all its reviews.
+     */
+    public function project(Request $request, int $id): JsonResponse
+    {
+        $project = Project::withCount('reviews')
+            ->with(['user:id,name,email'])
+            ->find($id);
+
+        if (!$project) {
+            return response()->json(['message' => 'Project not found'], 404);
+        }
+
+        $reviews = Review::with(['score', 'project'])
+            ->where('project_id', $id)
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(fn($r) => [
+                'id' => $r->id,
+                'persona' => $r->persona,
+                'page_goal' => $r->page_goal,
+                'status' => $r->status,
+                'scores' => $r->score ? [
+                    'overall' => $r->score->overall,
+                    'visual_hierarchy' => $r->score->visual_hierarchy,
+                    'clarity' => $r->score->clarity,
+                    'accessibility' => $r->score->accessibility,
+                    'consistency' => $r->score->consistency,
+                    'layout' => $r->score->layout,
+                    'typography' => $r->score->typography,
+                    'ux' => $r->score->ux,
+                ] : null,
+                'created_at' => $r->created_at,
+            ]);
+
+        $avgScore = $reviews
+            ->filter(fn($r) => $r['scores'] && $r['scores']['overall'])
+            ->avg('scores.overall');
+
+        return response()->json([
+            'project' => [
+                'id' => $project->id,
+                'name' => $project->name,
+                'description' => $project->description,
+                'user' => $project->user ? ['id' => $project->user->id, 'name' => $project->user->name, 'email' => $project->user->email] : null,
+                'reviews_count' => $project->reviews_count,
+                'avg_score' => $avgScore ? round($avgScore, 1) : null,
+                'created_at' => $project->created_at,
+                'updated_at' => $project->updated_at,
+            ],
+            'reviews' => $reviews,
         ]);
     }
 }

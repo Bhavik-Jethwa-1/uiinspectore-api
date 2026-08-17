@@ -184,17 +184,49 @@ class AIReviewService
 
     private function buildPrompt(string $persona, string $pageGoal): string
     {
-        return <<<PROMPT
-You are an expert senior UI/UX reviewer. Analyze the screenshot for a {$persona}.
-Page goal: {$pageGoal}
+        return <<<'PROMPT'
+You are an expert senior UI/UX designer and accessibility specialist.
+Analyze the uploaded screenshot from a FIRST-TIME USER perspective.
 
-Respond with ONLY a valid JSON object — no markdown, no code blocks, no text outside it.
+PAGE GOAL: Describe what the user should be able to do on this page.
 
-Required JSON structure:
+CRITICAL RULES:
+- Analyze ONLY what is visually visible in this screenshot
+- Do NOT make any claims about backend performance, API speed, database efficiency, code quality, or implementation details
+- Do NOT say "the API is slow" or "the database query is inefficient" — you cannot observe these
+- Do NOT reference frameworks, programming languages, libraries, or technology choices visible in the UI
+- If you cannot determine something from the screenshot alone, say so in the description
+- All coordinates must accurately identify the problem area in the screenshot — not generic areas
+
+VISUAL ELEMENTS TO ANALYZE:
+1. Visual Hierarchy — What stands out first? Is the most important element clearly visible?
+2. Layout — Is information arranged logically? Is there good use of space?
+3. Spacing — Are elements properly spaced? Too cramped or too sparse?
+4. Alignment — Are elements properly aligned? Any obvious misalignments?
+5. Typography — Is text readable? Good font hierarchy? Appropriate sizes?
+6. Font Hierarchy — Can you distinguish headings from body text at a glance?
+7. Color Usage — Are colors used purposefully? Is there good contrast?
+8. Contrast — Can all text and UI elements be clearly distinguished?
+9. Buttons — Are CTAs clearly identifiable? Do they look clickable?
+10. Forms — Are form fields clearly labeled? Is it obvious what to enter?
+11. Navigation — Is it clear how to navigate? Are navigation items obvious?
+12. Cards — Are cards well-defined? Is content properly contained?
+13. Images — Are images clear and appropriately sized?
+14. Icons — Are icons recognizable? Consistent in style and size?
+15. Whitespace — Is there enough breathing room? Too cluttered?
+16. Consistency — Are similar elements styled consistently?
+17. Visual Clarity — Is the overall interface easy to understand at a glance?
+18. Readability — Can all text be read comfortably?
+19. Accessibility — Can users with disabilities use this interface? (color-blind safe, sufficient contrast)
+20. Responsive Concerns — Does the layout adapt appropriately to different screen sizes?
+
+RESPOND WITH ONLY A VALID JSON OBJECT — no markdown, no code blocks, no text outside it.
+
+JSON SCHEMA:
 {
   "overallScore": 0-100,
-  "summary": "2-3 sentence summary of the UI",
-  "strengths": ["strength 1", "strength 2"],
+  "summary": "2-3 sentence summary of the overall UI quality",
+  "strengths": ["specific strength 1", "specific strength 2"],
   "scores": {
     "visualHierarchy": 0-100,
     "clarity": 0-100,
@@ -206,10 +238,12 @@ Required JSON structure:
   },
   "issues": [
     {
-      "title": "Issue title",
+      "title": "Specific issue title",
       "severity": "critical|high|medium|low",
-      "description": "What the problem is",
-      "recommendation": "How to fix it",
+      "description": "What specifically is wrong with this element",
+      "whyItMatters": "Why this problem matters for users",
+      "recommendation": "Specific actionable fix",
+      "category": "visualHierarchy|layout|typography|color|accessibility|consistency|content|navigation",
       "x": 0-100,
       "y": 0-100,
       "width": 0-100,
@@ -220,18 +254,48 @@ Required JSON structure:
     {
       "title": "Suggestion title",
       "priority": "critical|high|medium|low",
-      "recommendation": "What to do",
-      "expectedImpact": "Why it matters"
+      "category": "visualHierarchy|layout|typography|color|accessibility|consistency|content|navigation",
+      "problem": "What specific problem does this suggestion solve",
+      "recommendation": "How to implement this suggestion",
+      "expectedImpact": "Expected UX improvement"
     }
   ]
 }
 
-Requirements:
+COORDINATE RULES (important):
+- x, y, width, height are PERCENTAGES (0-100) of the screenshot dimensions
+- Coordinates must identify the EXACT region of the problem, not a generic area
+- For small elements (single button, icon): width/height should be 5-15% at most
+- For area problems (poor spacing, clutter): use the full affected area
+- If an issue spans the entire screen (e.g., poor contrast everywhere): use x:0, y:0, width:100, height:100
+- If an issue has no specific location (e.g., font is small everywhere): provide a representative region
+- NEVER use coordinates like 0, 0, 100, 100 for a small localized issue
+- Be PRECISE — wrong coordinates make annotation pins appear in the wrong place
+
+SEVERITY DEFINITIONS:
+- critical: Issue prevents task completion or makes interface unusable
+- high: Significant usability problem that seriously impacts user experience
+- medium: Usability problem that should be fixed but is not critical
+- low: Minor polish or aesthetic improvement
+
+CATEGORY DEFINITIONS:
+- visualHierarchy: What stands out vs what should stand out
+- layout: Overall arrangement and composition of elements
+- typography: Text readability, font sizes, font weights, line height
+- color: Color usage, palette consistency, color harmony
+- accessibility: Contrast, focus states, screen reader support
+- consistency: Inconsistent styling across similar elements
+- content: Text content quality, labels, placeholder text
+- navigation: How users find and reach different areas
+
+REQUIREMENTS:
 - overallScore must be 0-100 (integer)
 - All scores must be 0-100 (integers)
 - issues and suggestions can be empty arrays if nothing found
-- x, y, width, height are percentages (0-100) of the screenshot dimensions
-- Be strict: respond with ONLY the JSON object, nothing else
+- Every issue MUST have: title, severity, description, whyItMatters, recommendation, category, and coordinates
+- Every suggestion MUST have: title, priority, category, problem, recommendation, expectedImpact
+- Be specific and detailed — vague issues and suggestions are not helpful
+- Respond with ONLY the JSON object, nothing else
 PROMPT;
     }
 
@@ -873,6 +937,63 @@ PROMPT;
         }
         if (!is_array($data['suggestions'])) {
             throw new \Exception('Suggestions must be an array');
+        }
+
+        // Validate each issue has required fields and valid coordinates
+        $validCategories = ['visualHierarchy', 'layout', 'typography', 'color', 'accessibility', 'consistency', 'content', 'navigation'];
+        foreach ($data['issues'] as $i => $issue) {
+            if (!is_array($issue)) {
+                throw new \Exception("Issue at index {$i} must be an object");
+            }
+            if (empty(($issue['title'] ?? ''))) {
+                throw new \Exception("Issue at index {$i} is missing a title");
+            }
+            if (empty(($issue['description'] ?? ''))) {
+                throw new \Exception("Issue at index {$i} ('{$issue['title']}') is missing a description");
+            }
+            if (empty(($issue['whyItMatters'] ?? ''))) {
+                throw new \Exception("Issue at index {$i} ('{$issue['title']}') is missing whyItMatters");
+            }
+            if (empty(($issue['recommendation'] ?? ''))) {
+                throw new \Exception("Issue at index {$i} ('{$issue['title']}') is missing a recommendation");
+            }
+            $category = $issue['category'] ?? '';
+            if (!in_array($category, $validCategories)) {
+                throw new \Exception("Issue at index {$i} ('{$issue['title']}') has invalid category '{$category}'. Must be one of: " . implode(', ', $validCategories));
+            }
+            // Validate coordinates are numeric and in valid range
+            foreach (['x', 'y', 'width', 'height'] as $coord) {
+                $val = $issue[$coord] ?? null;
+                if (!is_numeric($val)) {
+                    throw new \Exception("Issue at index {$i} ('{$issue['title']}') has non-numeric coordinate {$coord}: " . gettype($val));
+                }
+                if ($val < 0 || $val > 100) {
+                    throw new \Exception("Issue at index {$i} ('{$issue['title']}') has {$coord}={$val} — must be between 0 and 100");
+                }
+            }
+        }
+
+        // Validate each suggestion has required fields
+        foreach ($data['suggestions'] as $i => $suggestion) {
+            if (!is_array($suggestion)) {
+                throw new \Exception("Suggestion at index {$i} must be an object");
+            }
+            if (empty(($suggestion['title'] ?? ''))) {
+                throw new \Exception("Suggestion at index {$i} is missing a title");
+            }
+            if (empty(($suggestion['problem'] ?? ''))) {
+                throw new \Exception("Suggestion at index {$i} ('{$suggestion['title']}') is missing problem");
+            }
+            if (empty(($suggestion['recommendation'] ?? ''))) {
+                throw new \Exception("Suggestion at index {$i} ('{$suggestion['title']}') is missing recommendation");
+            }
+            if (empty(($suggestion['expectedImpact'] ?? ''))) {
+                throw new \Exception("Suggestion at index {$i} ('{$suggestion['title']}') is missing expectedImpact");
+            }
+            $category = $suggestion['category'] ?? '';
+            if (!in_array($category, $validCategories)) {
+                throw new \Exception("Suggestion at index {$i} ('{$suggestion['title']}') has invalid category '{$category}'. Must be one of: " . implode(', ', $validCategories));
+            }
         }
 
         // Annotations — optional but if present must be an array of objects with coordinates
