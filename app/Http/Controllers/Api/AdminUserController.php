@@ -167,7 +167,7 @@ class AdminUserController extends Controller
             if ($currentAdmin && $currentAdmin->id === $user->id) {
                 return response()->json([
                     'message' => 'You cannot change your own role.',
-                ], 422);
+                ], 403);
             }
 
             if (!$targetAdmin && $user->is_admin) {
@@ -186,7 +186,7 @@ class AdminUserController extends Controller
             if ($currentAdmin && $currentAdmin->id === $user->id) {
                 return response()->json([
                     'message' => 'You cannot change your own account status.',
-                ], 422);
+                ], 403);
             }
             $user->is_active = (bool) $request->input('is_active');
         }
@@ -240,7 +240,7 @@ class AdminUserController extends Controller
         if ($currentAdmin && $currentAdmin->id === $user->id) {
             return response()->json([
                 'message' => 'You cannot delete your own account.',
-            ], 422);
+            ], 403);
         }
 
         if ($user->is_admin) {
@@ -420,7 +420,7 @@ class AdminUserController extends Controller
         if ($currentAdmin && $currentAdmin->id === $user->id) {
             return response()->json([
                 'message' => 'You cannot suspend your own account.',
-            ], 422);
+            ], 403);
         }
 
         if ($user->is_admin && $user->is_active) {
@@ -456,7 +456,7 @@ class AdminUserController extends Controller
         if ($currentAdmin && $currentAdmin->id === $user->id) {
             return response()->json([
                 'message' => 'You cannot activate your own account.',
-            ], 422);
+            ], 403);
         }
 
         $user->is_active = true;
