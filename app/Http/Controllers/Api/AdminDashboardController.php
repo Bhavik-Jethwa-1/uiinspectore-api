@@ -85,7 +85,7 @@ class AdminDashboardController extends Controller
      */
     public function reviews(Request $request): JsonResponse
     {
-        $query = Review::with(['project:id,name', 'score'])
+        $query = Review::with(['project:id,name,user_id', 'project.user:id,name', 'score'])
             ->orderBy('created_at', 'desc');
 
         // Search filter
@@ -120,6 +120,7 @@ class AdminDashboardController extends Controller
             'project_name' => $r->project?->name,
             'persona' => $r->persona,
             'page_goal' => $r->page_goal,
+            'user_name' => $r->project?->user?->name,
             'status' => $r->status,
             'scores' => $r->scores ? [
                 'overall' => $r->scores->overall,
