@@ -159,8 +159,16 @@ class AdminUserController extends Controller
             return response()->json(['message' => 'User not found'], 404);
         }
 
+        $currentAdmin = $request->user();
+
         if ($request->has('is_admin')) {
             $targetAdmin = (bool) $request->input('is_admin');
+
+            if ($currentAdmin && $currentAdmin->id === $user->id) {
+                return response()->json([
+                    'message' => 'You cannot change your own role.',
+                ], 422);
+            }
 
             if (!$targetAdmin && $user->is_admin) {
                 $adminCount = User::where('is_admin', true)->where('is_active', true)->count();
@@ -175,6 +183,11 @@ class AdminUserController extends Controller
         }
 
         if ($request->has('is_active')) {
+            if ($currentAdmin && $currentAdmin->id === $user->id) {
+                return response()->json([
+                    'message' => 'You cannot change your own account status.',
+                ], 422);
+            }
             $user->is_active = (bool) $request->input('is_active');
         }
 
@@ -221,6 +234,13 @@ class AdminUserController extends Controller
 
         if (!$user) {
             return response()->json(['message' => 'User not found'], 404);
+        }
+
+        $currentAdmin = $request->user();
+        if ($currentAdmin && $currentAdmin->id === $user->id) {
+            return response()->json([
+                'message' => 'You cannot delete your own account.',
+            ], 422);
         }
 
         if ($user->is_admin) {
@@ -396,6 +416,13 @@ class AdminUserController extends Controller
             return response()->json(['message' => 'User not found.'], 404);
         }
 
+        $currentAdmin = $request->user();
+        if ($currentAdmin && $currentAdmin->id === $user->id) {
+            return response()->json([
+                'message' => 'You cannot suspend your own account.',
+            ], 422);
+        }
+
         if ($user->is_admin && $user->is_active) {
             $adminCount = User::where('is_admin', true)->where('is_active', true)->count();
             if ($adminCount <= 1) {
@@ -423,6 +450,13 @@ class AdminUserController extends Controller
         $user = User::find($id);
         if (!$user) {
             return response()->json(['message' => 'User not found.'], 404);
+        }
+
+        $currentAdmin = $request->user();
+        if ($currentAdmin && $currentAdmin->id === $user->id) {
+            return response()->json([
+                'message' => 'You cannot activate your own account.',
+            ], 422);
         }
 
         $user->is_active = true;
