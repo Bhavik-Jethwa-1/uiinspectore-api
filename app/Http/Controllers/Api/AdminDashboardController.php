@@ -76,6 +76,19 @@ class AdminDashboardController extends Controller
             'recent_users' => $recentUsers,
             'recent_reviews' => $recentReviews,
             'recent_projects' => $recentProjects,
+            'failed_reviews_list' => Review::with(['project:id,name', 'score'])
+                ->where('status', 'failed')
+                ->orderBy('created_at', 'desc')
+                ->limit(5)
+                ->get()
+                ->map(fn($r) => [
+                    'id' => $r->id,
+                    'project_id' => $r->project_id,
+                    'project_name' => $r->project?->name,
+                    'status' => $r->status,
+                    'scores' => $r->score ? ['overall' => $r->score->overall] : null,
+                    'created_at' => $r->created_at,
+                ]),
         ]);
     }
 
