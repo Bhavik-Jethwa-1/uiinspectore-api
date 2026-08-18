@@ -42,6 +42,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('admin')->group(function () {
         Route::get('/admin/dashboard', [AdminDashboardController::class, 'index']);
         Route::get('/admin/reviews', [AdminDashboardController::class, 'reviews']);
+        Route::get('/admin/reviews/{id}', [AdminDashboardController::class, 'review']);
         Route::get('/admin/projects', [AdminDashboardController::class, 'projects']);
         Route::get('/admin/projects/{id}', [AdminDashboardController::class, 'project']);
         Route::delete('/admin/projects/{id}', [ProjectController::class, 'destroy']);

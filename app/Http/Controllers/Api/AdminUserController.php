@@ -50,12 +50,21 @@ class AdminUserController extends Controller
             case 'name_desc':
                 $query->orderBy('name', 'desc');
                 break;
+            case 'last_active':
+                $query->orderByRaw("COALESCE((SELECT MAX(created_at) FROM activity_logs WHERE activity_logs.user_id = users.id), users.updated_at) DESC");
+                break;
             default:
                 $query->orderBy('created_at', 'desc');
         }
 
         $perPage = min((int) $request->input('per_page', 20), 100);
         $users = $query->withCount(['projects', 'reviews'])->paginate($perPage);
+
+        // Append last_activity to each user item
+        $users->getCollection()->transform(function ($user) {
+            $user->last_activity = $user->activityLogs()->latest()->value('created_at');
+            return $user;
+        });
 
         return response()->json([
             'users' => $users->items(),
@@ -132,6 +141,7 @@ class AdminUserController extends Controller
                 'updated_at' => $user->updated_at,
                 'projects_count' => $user->projects_count,
                 'reviews_count' => $user->reviews_count,
+                'last_activity' => $user->activityLogs()->latest()->value('created_at'),
             ],
             'projects' => [
                 'data' => $projects,

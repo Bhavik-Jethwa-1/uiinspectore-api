@@ -23,6 +23,7 @@ class AdminDashboardController extends Controller
         $totalProjects = Project::count();
         $totalReviews = Review::count();
         $completedReviews = Review::where('status', 'completed')->count();
+        $analyzingReviews = Review::where('status', 'analyzing')->count();
         $pendingReviews = Review::where('status', 'pending')->count();
         $failedReviews = Review::where('status', 'failed')->count();
         $activeUsers = User::where('is_active', true)->count();
@@ -68,6 +69,7 @@ class AdminDashboardController extends Controller
                 'total_projects' => $totalProjects,
                 'total_reviews' => $totalReviews,
                 'completed_reviews' => $completedReviews,
+                'analyzing_reviews' => $analyzingReviews,
                 'pending_reviews' => $pendingReviews,
                 'failed_reviews' => $failedReviews,
                 'active_users' => $activeUsers,
@@ -131,8 +133,7 @@ class AdminDashboardController extends Controller
             'id' => $r->id,
             'project_id' => $r->project_id,
             'project_name' => $r->project?->name,
-            'persona' => $r->persona,
-            'page_goal' => $r->page_goal,
+            'user_id' => $r->project?->user?->id,
             'user_name' => $r->project?->user?->name,
             'status' => $r->status,
             'scores' => $r->score ? [
@@ -159,6 +160,88 @@ class AdminDashboardController extends Controller
     }
 
     /**
+     * GET /api/admin/reviews/{id}
+     * Returns full review detail for admin use.
+     */
+    public function review(int $id): JsonResponse
+    {
+        $review = Review::with([
+            'project:id,name,user_id',
+            'project.user:id,name,email',
+            'score',
+            'issues',
+            'annotations',
+            'suggestions',
+        ])->findOrFail($id);
+
+        return response()->json([
+            'review' => [
+                'id' => $review->id,
+                'project_id' => $review->project_id,
+                'project_name' => $review->project?->name,
+                'user_id' => $review->project?->user?->id,
+                'user_name' => $review->project?->user?->name,
+                'user_email' => $review->project?->user?->email,
+                'status' => $review->status,
+                'persona' => $review->persona,
+                'page_goal' => $review->page_goal,
+                'screenshot_url' => $review->screenshot ? '/storage/' . $review->screenshot->path : null,
+                'scores' => $review->score ? [
+                    'overall' => $review->score->overall,
+                    'visual_hierarchy' => $review->score->visual_hierarchy,
+                    'clarity' => $review->score->clarity,
+                    'accessibility' => $review->score->accessibility,
+                    'consistency' => $review->score->consistency,
+                    'layout' => $review->score->layout,
+                    'typography' => $review->score->typography,
+                    'ux' => $review->score->ux,
+                    'summary' => $review->score->summary ?? null,
+                    'strengths' => $review->score->strengths ?? [],
+                ] : null,
+                'issues' => $review->issues->map(fn($i) => [
+                    'id' => $i->id,
+                    'title' => $i->title,
+                    'severity' => $i->severity,
+                    'category' => $i->category,
+                    'description' => $i->description,
+                    'why_it_matters' => $i->why_it_matters,
+                    'recommendation' => $i->recommendation,
+                ]),
+                'annotations' => $review->annotations->map(fn($a) => [
+                    'id' => $a->id,
+                    'issue_id' => $a->review_issue_id,
+                    'x' => $a->x,
+                    'y' => $a->y,
+                    'width' => $a->width,
+                    'height' => $a->height,
+                ]),
+                'suggestions' => $review->suggestions->map(fn($s) => [
+                    'id' => $s->id,
+                    'title' => $s->title,
+                    'priority' => $s->priority,
+                    'category' => $s->category,
+                    'problem' => $s->problem,
+                    'recommendation' => $s->recommendation,
+                    'expected_impact' => $s->expected_impact,
+                ]),
+                'created_at' => $review->created_at,
+                'updated_at' => $review->updated_at,
+            ],
+        ]);
+    }
+
+    /**
+     * Derives project status from aggregated review status data.
+     */
+    private function deriveProjectStatus(?object $s): string
+    {
+        if (!$s || $s->total_count === 0) return 'no-reviews';
+        if ($s->completed_count > 0) return 'active';
+        if ($s->failed_count === $s->total_count) return 'failed';
+        return 'in-progress';
+    }
+
+    /**
      * GET /api/admin/projects
      * Returns all projects with review counts — single efficient query.
      */
@@ -170,6 +253,9 @@ class AdminDashboardController extends Controller
         if ($request->has('search') && $request->search) {
             $query->where('name', 'like', '%' . $request->search . '%');
         }
+
+        // Status filter (applied after status derivation)
+        $statusFilter = $request->input('status', 'all');
 
         // Sort
         $sort = $request->sort ?? 'newest';
@@ -185,6 +271,33 @@ class AdminDashboardController extends Controller
         $perPage = min((int) ($request->per_page ?: 20), 100);
         $paginator = $query->paginate($perPage);
 
+        // Pre-fetch scores & last review date for all paginated projects in one query
+        $projectIds = collect($paginator->items())->pluck('id');
+        $scoreData = DB::table('reviews')
+            ->select(
+                'project_id',
+                DB::raw('AVG(review_scores.overall) as avg_score'),
+                DB::raw('MAX(reviews.created_at) as last_review_date')
+            )
+            ->leftJoin('review_scores', 'reviews.id', '=', 'review_scores.review_id')
+            ->whereIn('project_id', $projectIds)
+            ->groupBy('project_id');
+
+        // Also get review statuses to derive project status
+        $statusData = DB::table('reviews')
+            ->select(
+                'project_id',
+                DB::raw('MAX(reviews.status) as latest_review_status'),
+                DB::raw('COUNT(CASE WHEN reviews.status = "completed" THEN 1 END) as completed_count'),
+                DB::raw('COUNT(CASE WHEN reviews.status = "failed" THEN 1 END) as failed_count'),
+                DB::raw('COUNT(*) as total_count')
+            )
+            ->whereIn('project_id', $projectIds)
+            ->groupBy('project_id');
+
+        $scoreMap = $scoreData->get()->keyBy('project_id');
+        $statusMap = $statusData->get()->keyBy('project_id');
+
         $projects = collect($paginator->items())->map(fn($p) => [
             'id' => $p->id,
             'name' => $p->name,
@@ -192,7 +305,17 @@ class AdminDashboardController extends Controller
             'reviews_count' => $p->reviews_count,
             'user' => $p->user ? ['id' => $p->user->id, 'name' => $p->user->name, 'email' => $p->user->email] : null,
             'created_at' => $p->created_at,
+            'avg_score' => isset($scoreMap[$p->id]) && $scoreMap[$p->id]->avg_score !== null
+                ? round((float) $scoreMap[$p->id]->avg_score, 1)
+                : null,
+            'last_review_date' => $scoreMap[$p->id]->last_review_date ?? null,
+            'status' => $this->deriveProjectStatus($statusMap[$p->id] ?? null),
         ]);
+
+        // Apply status filter (derived in PHP, not SQL)
+        if ($statusFilter !== 'all') {
+            $projects = $projects->filter(fn($p) => ($p['status'] ?? null) === $statusFilter);
+        }
 
         return response()->json([
             'projects' => $projects,
