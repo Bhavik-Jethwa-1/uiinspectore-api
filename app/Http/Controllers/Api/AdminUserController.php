@@ -60,9 +60,11 @@ class AdminUserController extends Controller
         $perPage = min((int) $request->input('per_page', 20), 100);
         $users = $query->withCount(['projects', 'reviews'])->paginate($perPage);
 
-        // Append last_activity to each user item
+        // Append last_activity and allow_login to each user item
         $users->getCollection()->transform(function ($user) {
             $user->last_activity = $user->activityLogs()->latest()->value('created_at');
+            $allowLoginSetting = $user->settings()->where('key', 'allow_login')->value('value');
+            $user->allow_login = !($allowLoginSetting === '0' || $allowLoginSetting === 'false');
             return $user;
         });
 
@@ -137,6 +139,7 @@ class AdminUserController extends Controller
                 'email' => $user->email,
                 'is_admin' => $user->is_admin,
                 'is_active' => $user->is_active,
+                'allow_login' => $settingsMap['allow_login'] !== '0' && $settingsMap['allow_login'] !== 'false',
                 'created_at' => $user->created_at,
                 'updated_at' => $user->updated_at,
                 'projects_count' => $user->projects_count,
@@ -201,6 +204,15 @@ class AdminUserController extends Controller
             $user->is_active = (bool) $request->input('is_active');
         }
 
+        if ($request->has('allow_login')) {
+            $allowLogin = $request->input('allow_login');
+            // Store as string '1'/'0' to match bool settings schema
+            $user->settings()->updateOrCreate(
+                ['key' => 'allow_login'],
+                ['value' => $allowLogin ? '1' : '0']
+            );
+        }
+
         $user->save();
 
         // Log the admin action on the target user
@@ -222,6 +234,10 @@ class AdminUserController extends Controller
 
         $remainingAdmins = User::where('is_admin', true)->where('is_active', true)->count();
 
+        // Fetch allow_login from user settings
+        $allowLoginSetting = $user->settings()->where('key', 'allow_login')->value('value');
+        $allowLogin = $allowLoginSetting !== '0' && $allowLoginSetting !== 'false';
+
         return response()->json([
             'message' => 'User updated.',
             'user' => [
@@ -230,6 +246,7 @@ class AdminUserController extends Controller
                 'email' => $user->email,
                 'is_admin' => $user->is_admin,
                 'is_active' => $user->is_active,
+                'allow_login' => $allowLogin,
                 'created_at' => $user->created_at,
                 'projects_count' => $user->projects()->count(),
                 'reviews_count' => $user->reviews()->count(),

@@ -57,6 +57,14 @@ class AuthController extends Controller
             ]);
         }
 
+        // Check allow_login setting (stored as user setting)
+        $allowLogin = $user->settings()->where('key', 'allow_login')->value('value');
+        if ($allowLogin === '0' || $allowLogin === 'false') {
+            throw ValidationException::withMessages([
+                'email' => ['Login is not allowed for this account. Contact your administrator.'],
+            ]);
+        }
+
         $token = $user->createToken('auth-token')->plainTextToken;
 
         ActivityLogger::log($user, 'login', "Logged in");
