@@ -205,6 +205,11 @@ class AdminUserController extends Controller
         }
 
         if ($request->has('allow_login')) {
+            if ($currentAdmin && $currentAdmin->id === $user->id) {
+                return response()->json([
+                    'message' => 'You cannot change your own login access.',
+                ], 403);
+            }
             $allowLogin = $request->input('allow_login');
             // Store as string '1'/'0' to match bool settings schema
             $user->settings()->updateOrCreate(
