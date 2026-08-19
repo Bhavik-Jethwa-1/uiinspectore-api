@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\AdminUserController;
 use App\Http\Controllers\Api\AdminSettingsController;
 use App\Http\Controllers\Api\AdminDashboardController;
+use App\Http\Controllers\Api\StorageController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
@@ -60,13 +61,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/admin/settings', [AdminSettingsController::class, 'show']);
         Route::post('/admin/settings', [AdminSettingsController::class, 'store']);
     });
-});
 
-// Storage for screenshots (protected by auth for now, can be opened later)
-Route::get('/storage/{path}', function ($path) {
-    $path = storage_path('app/' . $path);
-    if (!file_exists($path)) {
-        abort(404);
-    }
-    return response()->file($path);
-})->where('path', '.*');
+    // Storage - protected by auth, uses StorageController for authorization
+    Route::get('/storage/{path}', [StorageController::class, 'screenshot'])->where('path', 'screenshots/.*');
+});
