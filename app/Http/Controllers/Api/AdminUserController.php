@@ -139,7 +139,7 @@ class AdminUserController extends Controller
                 'email' => $user->email,
                 'is_admin' => $user->is_admin,
                 'is_active' => $user->is_active,
-                'allow_login' => $settingsMap['allow_login'] !== '0' && $settingsMap['allow_login'] !== 'false',
+                'allow_login' => isset($settingsMap['allow_login']) && $settingsMap['allow_login'] !== '0' && $settingsMap['allow_login'] !== 'false',
                 'created_at' => $user->created_at,
                 'updated_at' => $user->updated_at,
                 'projects_count' => $user->projects_count,
