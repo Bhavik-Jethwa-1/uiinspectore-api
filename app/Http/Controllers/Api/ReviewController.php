@@ -58,14 +58,18 @@ class ReviewController extends Controller
     public function show(Request $request, int $id): JsonResponse
     {
         $user = $request->user();
-        if ($user->is_admin) {
-            // Admins can view any review
-            $review = Review::with(['project', 'screenshot', 'score', 'issues', 'annotations', 'suggestions'])
-                ->findOrFail($id);
-        } else {
-            $review = $user->reviews()
-                ->with(['project', 'screenshot', 'score', 'issues', 'annotations', 'suggestions'])
-                ->findOrFail($id);
+        try {
+            if ($user->is_admin) {
+                // Admins can view any review
+                $review = Review::with(['project', 'screenshot', 'score', 'issues', 'annotations', 'suggestions'])
+                    ->findOrFail($id);
+            } else {
+                $review = $user->reviews()
+                    ->with(['project', 'screenshot', 'score', 'issues', 'annotations', 'suggestions'])
+                    ->findOrFail($id);
+            }
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['error' => 'Review not found', 'code' => 'NOT_FOUND'], 404);
         }
 
         return response()->json(['review' => $this->formatReviewFull($review)]);
@@ -194,10 +198,16 @@ class ReviewController extends Controller
      */
     public function retry(Request $request, int $id): JsonResponse
     {
-        $review = $request->user()
-            ->reviews()
-            ->with('screenshot')
-            ->findOrFail($id);
+        $user = $request->user();
+        try {
+            if ($user->is_admin) {
+                $review = Review::with('screenshot')->findOrFail($id);
+            } else {
+                $review = $user->reviews()->with('screenshot')->findOrFail($id);
+            }
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['error' => 'Review not found', 'code' => 'NOT_FOUND'], 404);
+        }
 
         // Check if screenshot exists - cannot retry without it
         if (!$review->screenshot_id) {
