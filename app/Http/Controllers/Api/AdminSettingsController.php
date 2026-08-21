@@ -18,7 +18,14 @@ class AdminSettingsController extends Controller
         $path = $this->getSettingsPath();
         if (File::exists($path)) {
             $data = json_decode(File::get($path), true);
-            return response()->json($data);
+            $key = $data['openai_key'] ?? '';
+            // Always return masked key — never expose the actual key to the frontend
+            if ($key && strlen($key) > 4) {
+                $masked = 'sk-...' . substr($key, -4);
+            } else {
+                $masked = $key ? 'sk-...' . substr($key, -1) : '';
+            }
+            return response()->json(['openai_key' => $masked]);
         }
         return response()->json(['openai_key' => '']);
     }
@@ -36,6 +43,6 @@ class AdminSettingsController extends Controller
             'updated_by' => $request->user()->id,
         ], JSON_PRETTY_PRINT));
 
-        return response()->json(['message' => 'Settings saved', 'openai_key' => $validated['openai_key'] ?? '']);
+        return response()->json(['message' => 'Settings saved', 'openai_key' => '']);
     }
 }
